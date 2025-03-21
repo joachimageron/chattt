@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Next debug",
+        "type": "node-terminal",
+        "request": "launch",
+        "command": "bun dev",
+        "cwd": "${workspaceFolder}/front"
+      },
+      {
+        "name": "Nest debug",
+        "type": "node-terminal",
+        "request": "launch",
+        "command": "bun start:debug",
+        "cwd": "${workspaceFolder}/api"
+      }
+    ]
+  }
