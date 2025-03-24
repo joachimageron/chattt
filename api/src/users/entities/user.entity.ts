@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { MinLength } from 'class-validator';
 
 @ObjectType()
 @Entity('users')
@@ -19,6 +20,7 @@ export class User {
   email: string;
 
   @Column()
+  @MinLength(6)
   password: string;
 
   @Field({ nullable: true })
