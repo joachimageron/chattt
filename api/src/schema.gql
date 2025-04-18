@@ -19,17 +19,22 @@ input LoginInput {
 }
 
 type LoginResponse {
-  accessToken: String!
   user: User!
+}
+
+type LogoutResponse {
+  success: Boolean!
 }
 
 type Mutation {
   createUser(createUserInput: CreateUserInput!): User!
   login(loginInput: LoginInput!): LoginResponse!
+  logout: LogoutResponse!
   updateUser(id: ID!, updateUserInput: UpdateUserInput!): User!
 }
 
 type Query {
+  me: UserResponse!
   user(id: ID!): User!
   users: [User!]!
 }
@@ -46,4 +51,8 @@ type User {
   id: ID!
   name: String
   updatedAt: DateTime!
+}
+
+type UserResponse {
+  user: User!
 }

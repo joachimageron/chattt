@@ -20,7 +20,15 @@ import { ConfigModule } from '@nestjs/config';
       driver: ApolloDriver,
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
       sortSchema: true,
-      playground: true,
+      context: ({ req, res }: { req: Request; res: Response }) => ({
+        req,
+        res,
+      }),
+      playground: {
+        settings: {
+          'request.credentials': 'include',
+        },
+      },
     }),
     UsersModule,
     AuthModule,

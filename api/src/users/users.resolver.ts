@@ -6,10 +6,17 @@ import { UsersService } from './users.service';
 import { User } from './entities/user.entity';
 import { CreateUserInput } from './dto/create-user.input';
 import { UpdateUserInput } from './dto/update-user.input';
+import { UserResponse } from 'src/auth/dto/user-response';
 
 @Resolver(() => User)
 export class UsersResolver {
   constructor(private readonly usersService: UsersService) {}
+
+  @Query(() => UserResponse)
+  @UseGuards(JwtAuthGuard)
+  me(@CurrentUser() user: User) {
+    return { user };
+  }
 
   @Mutation(() => User)
   async createUser(
