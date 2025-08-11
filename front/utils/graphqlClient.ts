@@ -41,3 +41,7 @@ export const AUTH_QUERIES = {
   REGISTER: `mutation Register($createUserInput: CreateUserInput!) { createUser(createUserInput: $createUserInput) { id email name } }`,
   LOGOUT: `mutation Logout { logout { success } }`,
 };
+
+export const USER_QUERIES = {
+  SEARCH_BY_EMAIL: `query SearchUsers($q: String!) { searchUsersByEmail(q: $q) { id email name } }`,
+};

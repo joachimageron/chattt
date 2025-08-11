@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, ILike } from 'typeorm';
 import { User } from './entities/user.entity';
 import { CreateUserInput } from './dto/create-user.input';
 import { UpdateUserInput } from './dto/update-user.input';
@@ -155,5 +155,15 @@ export class UsersService {
     const salt = await bcrypt.genSalt();
     user.password = await bcrypt.hash(newPlainPassword, salt);
     await this.usersRepository.save(user);
+  }
+
+  async searchByEmail(term: string): Promise<User[]> {
+    const trimmed = term.trim();
+    if (!trimmed) return [];
+    return this.usersRepository.find({
+      where: { email: ILike(`%${trimmed}%`) },
+      take: 10,
+      order: { createdAt: 'DESC' },
+    });
   }
 }

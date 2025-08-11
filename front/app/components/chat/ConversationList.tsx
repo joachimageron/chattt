@@ -21,6 +21,7 @@ import type { ConversationSummary } from "./types";
 import { useState } from "react";
 import { useChatSocket } from "./useChatSocket";
 import { useAuth } from "../providers/AuthProvider";
+import { gqlFetch, USER_QUERIES } from "@/utils/graphqlClient";
 
 interface ConversationListProps {
   onSelect?: (id: string) => void;
@@ -33,18 +34,52 @@ export function ConversationList({ onSelect }: ConversationListProps) {
   const { createConversation } = useChatSocket();
   const { user } = useAuth();
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
-  const [participantIds, setParticipantIds] = useState<string>("");
   const [title, setTitle] = useState("");
   const [isGroup, setIsGroup] = useState(false);
+  const [searchEmail, setSearchEmail] = useState("");
+  const [userResults, setUserResults] = useState<
+    { id: string; email: string; name?: string | null }[]
+  >([]);
+  const [selectedUsers, setSelectedUsers] = useState<
+    { id: string; email: string }[]
+  >([]);
+
+  const runSearch = async (term: string) => {
+    try {
+      if (!term.trim()) {
+        setUserResults([]);
+        return;
+      }
+      const data = await gqlFetch<{
+        searchUsersByEmail: {
+          id: string;
+          email: string;
+          name?: string | null;
+        }[];
+      }>(USER_QUERIES.SEARCH_BY_EMAIL, { q: term });
+      setUserResults(data.searchUsersByEmail.filter((u) => u.id !== user?.id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSelectUser = (u: { id: string; email: string }) => {
+    if (selectedUsers.find((s) => s.id === u.id)) return;
+    setSelectedUsers((prev) => [...prev, u]);
+    setSearchEmail("");
+    setUserResults([]);
+  };
+  const removeSelected = (id: string) => {
+    setSelectedUsers((prev) => prev.filter((u) => u.id !== id));
+  };
 
   const handleCreate = () => {
-    const ids = participantIds
-      .split(/[\n,;\s]+/)
-      .map((s) => s.trim())
+    const ids = selectedUsers
+      .map((u) => u.id)
       .filter((s) => s && s !== user?.id);
     if (!ids.length) return;
     createConversation(ids, title || undefined, isGroup ? "GROUP" : "DIRECT");
-    setParticipantIds("");
+    setSelectedUsers([]);
     setTitle("");
     setIsGroup(false);
     onClose();
@@ -117,12 +152,52 @@ export function ConversationList({ onSelect }: ConversationListProps) {
                   Groupe
                 </Checkbox>
                 <Input
-                  label="Participants"
-                  placeholder="IDs des utilisateurs (séparés par espace, virgule...)"
-                  description="N'incluez pas votre propre ID"
-                  value={participantIds}
-                  onChange={(e) => setParticipantIds(e.target.value)}
+                  label="Rechercher un participant par email"
+                  placeholder="Tapez un email"
+                  value={searchEmail}
+                  onChange={async (e) => {
+                    const v = e.target.value;
+                    setSearchEmail(v);
+                    runSearch(v);
+                  }}
                 />
+                {userResults.length > 0 && (
+                  <div className="max-h-40 overflow-auto border rounded p-2 space-y-1">
+                    {userResults.map((u) => (
+                      <div
+                        key={u.id}
+                        className="flex justify-between items-center text-sm"
+                      >
+                        <span>{u.email}</span>
+                        <Button
+                          size="sm"
+                          variant="light"
+                          onPress={() => handleSelectUser(u)}
+                        >
+                          Ajouter
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {selectedUsers.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {selectedUsers.map((u) => (
+                      <span
+                        key={u.id}
+                        className="px-2 py-1 bg-default-100 rounded text-xs flex items-center gap-1"
+                      >
+                        {u.email}
+                        <button
+                          onClick={() => removeSelected(u.id)}
+                          className="text-danger hover:underline"
+                        >
+                          x
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </ModalBody>
               <ModalFooter>
                 <Button variant="light" onPress={onClose}>

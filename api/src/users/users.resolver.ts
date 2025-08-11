@@ -44,4 +44,10 @@ export class UsersResolver {
   ): Promise<User> {
     return this.usersService.update(id, updateUserInput, currentUser.id);
   }
+
+  @Query(() => [User])
+  @UseGuards(JwtAuthGuard)
+  async searchUsersByEmail(@Args('q') q: string): Promise<User[]> {
+    return this.usersService.searchByEmail(q);
+  }
 }

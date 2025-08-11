@@ -48,6 +48,7 @@ type Mutation {
 
 type Query {
   me: UserResponse!
+  searchUsersByEmail(q: String!): [User!]!
   user(id: ID!): User!
   users: [User!]!
 }
