@@ -16,6 +16,7 @@ export function useChatSocket() {
     socketRef.current = socket;
 
     const onConnect = () => {
+      console.log("[socket] connected");
       socket.emit("conversation.list");
     };
     const onError = (err: unknown) => {
@@ -27,6 +28,8 @@ export function useChatSocket() {
       chat.setConversations(payload.conversations);
     };
     const onMessageNew = (msg: ChatMessage) => {
+      // Avoid duplicate: if it's our own message, we'll handle via message.sent
+      if (msg.senderId === user?.id) return;
       chat.upsertMessages(msg.conversationId, [msg]);
     };
     const onMessageSent = ({
@@ -46,6 +49,28 @@ export function useChatSocket() {
       const convId = chat.activeConversationId; // fallback
       if (convId) chat.deleteMessage(convId, messageId);
     };
+    const onConversationCreated = (payload: {
+      conversation: ConversationSummary;
+    }) => {
+      chat.upsertConversation(payload.conversation);
+    };
+    const onConversationUpdated = (payload: {
+      conversation: ConversationSummary;
+    }) => {
+      chat.upsertConversation(payload.conversation);
+    };
+    const onMessageList = (payload: {
+      conversationId: string;
+      messages: ChatMessage[];
+      hasMore: boolean;
+    }) => {
+      console.log(
+        "[socket] message.list",
+        payload.conversationId,
+        payload.messages.length
+      );
+      chat.upsertMessages(payload.conversationId, payload.messages);
+    };
 
     socket.on("connect", onConnect);
     socket.on("error", onError);
@@ -54,6 +79,9 @@ export function useChatSocket() {
     socket.on("message.sent", onMessageSent);
     socket.on("message.updated", onMessageUpdated);
     socket.on("message.deleted", onMessageDeleted);
+    socket.on("conversation.created", onConversationCreated);
+    socket.on("conversation.updated", onConversationUpdated);
+    socket.on("message.list", onMessageList);
 
     return () => {
       socket.off("connect", onConnect);
@@ -63,6 +91,9 @@ export function useChatSocket() {
       socket.off("message.sent", onMessageSent);
       socket.off("message.updated", onMessageUpdated);
       socket.off("message.deleted", onMessageDeleted);
+      socket.off("conversation.created", onConversationCreated);
+      socket.off("conversation.updated", onConversationUpdated);
+      socket.off("message.list", onMessageList);
     };
   }, [user, chat]);
 
@@ -111,5 +142,28 @@ export function useChatSocket() {
     socketRef.current.emit("room.join", { conversationId });
   }, []);
 
-  return { sendMessage, loadMessages, joinConversation };
+  const createConversation = useCallback(
+    (
+      participantUserIds: string[],
+      title?: string,
+      type: "DIRECT" | "GROUP" = "DIRECT"
+    ) => {
+      if (!socketRef.current) return;
+      socketRef.current.emit("conversation.create", {
+        participantUserIds,
+        title,
+        type,
+      });
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (chat.activeConversationId) {
+      joinConversation(chat.activeConversationId);
+      loadMessages(chat.activeConversationId);
+    }
+  }, [chat.activeConversationId, joinConversation, loadMessages]);
+
+  return { sendMessage, loadMessages, joinConversation, createConversation };
 }

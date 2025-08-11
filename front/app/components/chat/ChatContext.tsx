@@ -5,6 +5,7 @@ import React, {
   useState,
   useCallback,
   ReactNode,
+  useMemo,
 } from "react";
 import { ChatMessage } from "./socketClient";
 import { ConversationSummary } from "./types";
@@ -15,6 +16,7 @@ interface ChatContextValue {
   activeConversationId: string | null;
   setActiveConversation: (id: string | null) => void;
   setConversations: (convs: ConversationSummary[]) => void;
+  upsertConversation: (c: ConversationSummary) => void;
   upsertMessages: (
     conversationId: string,
     msgs: ChatMessage[],
@@ -68,7 +70,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const confirmMessage = useCallback((tempId: string, real: ChatMessage) => {
     setMessages((prev) => {
       const list = prev[real.conversationId] || [];
-      const merged = [...list.filter((m) => m.id !== tempId), real];
+      const merged = [
+        ...list.filter((m) => m.id !== tempId && m.id !== real.id),
+        real,
+      ];
       merged.sort(
         (a, b) =>
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -104,17 +109,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const value: ChatContextValue = {
-    conversations,
-    messages,
-    activeConversationId,
-    setActiveConversation: setActiveConversationId,
-    setConversations,
-    upsertMessages,
-    updateMessage,
-    deleteMessage,
-    confirmMessage,
-  };
+  const upsertConversation = useCallback((c: ConversationSummary) => {
+    setConversationsState((prev) => ({
+      ...prev,
+      [c.id]: { ...prev[c.id], ...c },
+    }));
+  }, []);
+
+  const value: ChatContextValue = useMemo(
+    () => ({
+      conversations,
+      messages,
+      activeConversationId,
+      setActiveConversation: setActiveConversationId,
+      setConversations,
+      upsertConversation,
+      upsertMessages,
+      updateMessage,
+      deleteMessage,
+      confirmMessage,
+    }),
+    [
+      conversations,
+      messages,
+      activeConversationId,
+      setConversations,
+      upsertConversation,
+      upsertMessages,
+      updateMessage,
+      deleteMessage,
+      confirmMessage,
+    ]
+  );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }

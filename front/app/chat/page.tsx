@@ -8,12 +8,33 @@ import { MessageInput } from "../components/chat/MessageInput";
 import { Spinner } from "@heroui/react";
 import { useChat } from "../components/chat/ChatContext";
 import type { ChatMessage } from "../components/chat/socketClient";
+import { useSearchParams, useRouter } from "next/navigation";
 
 export default function ChatPage() {
   const { user, isLoading } = useAuth();
   const { sendMessage, joinConversation, loadMessages } = useChatSocket();
   const chat = useChat();
-  const { activeConversationId, messages } = chat;
+  const { activeConversationId, messages, setActiveConversation } = chat;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Initialize from URL param
+  useEffect(() => {
+    const fromUrl = searchParams.get("c");
+    if (fromUrl && fromUrl !== activeConversationId) {
+      setActiveConversation(fromUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSelectConversation = (id: string) => {
+    if (id !== activeConversationId) {
+      setActiveConversation(id);
+      const url = new URL(window.location.href);
+      url.searchParams.set("c", id);
+      router.replace(url.pathname + "?" + url.searchParams.toString());
+    }
+  };
 
   useEffect(() => {
     if (activeConversationId) {
@@ -36,7 +57,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] bg-background">
-      <ConversationList />
+      <ConversationList onSelect={handleSelectConversation} />
       <div className="flex-1 flex flex-col">
         {activeConversationId ? (
           <>

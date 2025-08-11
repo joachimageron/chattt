@@ -12,6 +12,7 @@ import { Logger } from '@nestjs/common';
 import { User } from '../users/entities/user.entity';
 import { ChatService } from './chat.service';
 import { SendMessageInput } from './dto/send-message.input';
+import { CreateConversationInput } from './dto/create-conversation.input';
 
 // augment Socket type locally
 interface AuthedSocket extends Socket {
@@ -226,6 +227,33 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         user.id,
       );
       client.emit('conversation.list', { conversations });
+    } catch (e) {
+      client.emit('error', { message: (e as Error).message });
+    }
+  }
+
+  @SubscribeMessage('conversation.create')
+  async handleCreateConversation(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() body: CreateConversationInput,
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    try {
+      const convo = await this.chatService.createConversation(user.id, body);
+      // join creator to room automatically
+      await client.join(convo.id);
+      client.data.joinedRooms?.add(convo.id);
+      // emit to creator
+      client.emit('conversation.created', { conversation: convo });
+      // inform other participants if they are connected
+      convo.participants
+        .filter((p) => p.userId !== user.id)
+        .forEach(() => {
+          this.server.to(convo.id).emit('conversation.updated', {
+            conversation: convo,
+          });
+        });
     } catch (e) {
       client.emit('error', { message: (e as Error).message });
     }

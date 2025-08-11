@@ -10,6 +10,7 @@ import { Conversation, ConversationType } from './entities/conversation.entity';
 import { ConversationParticipant } from './entities/conversationParticipant.entity';
 import { SendMessageInput } from './dto/send-message.input';
 import { User } from '../users/entities/user.entity';
+import { CreateConversationInput } from './dto/create-conversation.input';
 
 @Injectable()
 export class ChatService {
@@ -185,6 +186,42 @@ export class ChatService {
       }),
     ]);
     return convo;
+  }
+
+  async createConversation(
+    currentUserId: string,
+    input: CreateConversationInput,
+  ): Promise<Conversation> {
+    const participantIds = Array.from(
+      new Set([currentUserId, ...input.participantUserIds]),
+    );
+
+    let convo: Conversation;
+    if (input.type === ConversationType.DIRECT && participantIds.length === 2) {
+      // reuse existing direct conversation if exists
+      convo = await this.createDirectConversation(
+        participantIds[0],
+        participantIds[1],
+      );
+    } else {
+      convo = this.convoRepo.create({
+        type: input.type ?? ConversationType.GROUP,
+        title: input.title,
+      });
+      convo = await this.convoRepo.save(convo);
+      await this.participantRepo.save(
+        participantIds.map((userId) =>
+          this.participantRepo.create({ conversationId: convo.id, userId }),
+        ),
+      );
+    }
+
+    const full = await this.convoRepo.findOne({
+      where: { id: convo.id },
+      relations: ['participants', 'messages'],
+    });
+    if (!full) return convo; // fallback (should not happen)
+    return full;
   }
 
   async findConversation(id: string): Promise<Conversation> {
