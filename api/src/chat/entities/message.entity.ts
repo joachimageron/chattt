@@ -10,6 +10,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { Conversation } from './conversation.entity';
 
 export enum MessageType {
   TEXT = 'TEXT',
@@ -39,9 +40,10 @@ export class Message {
   @Column()
   conversationId: string;
 
-  // Lazy relation to avoid circular import for now (could import Conversation later)
-  // @ManyToOne(() => Conversation, (c) => c.messages, { onDelete: 'CASCADE' })
-  // conversation: Conversation;
+  @ManyToOne(() => Conversation, (c) => c.messages, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'conversationId' })
+  @Field(() => Conversation, { nullable: true })
+  conversation?: Conversation;
 
   @Field(() => ID)
   @Column()

@@ -46,7 +46,7 @@ export class Conversation {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @OneToMany(() => Message, (m: Message) => m.conversationId)
+  @OneToMany(() => Message, (m: Message) => m.conversation)
   messages: Message[];
 
   @OneToMany(

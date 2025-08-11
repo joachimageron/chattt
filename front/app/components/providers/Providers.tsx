@@ -3,6 +3,7 @@
 
 import { HeroUIProvider, ToastProvider } from "@heroui/react";
 import { AuthProvider } from "@/app/components/providers/AuthProvider";
+import { ChatProvider } from "@/app/components/chat/ChatContext";
 
 // import {useRouter}from 'next/navigation'
 
@@ -19,7 +20,9 @@ export default function Providers({
           toastOffset={15}
           toastProps={{ variant: "flat" }}
         />
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ChatProvider>{children}</ChatProvider>
+        </AuthProvider>
       </HeroUIProvider>
     </>
   );

@@ -7,6 +7,7 @@ import {
   NavbarContent,
   NavbarItem,
   Button,
+  Link as HeroLink,
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
@@ -45,7 +46,7 @@ export default function AppNavBar() {
         <span className="font-bold text-xl">Chattt</span>
       </NavbarBrand>
 
-      {/* <NavbarContent className="hidden sm:flex gap-6" justify="center">
+      <NavbarContent className="hidden sm:flex gap-6" justify="center">
         <NavbarItem isActive={pathname === "/"}>
           <HeroLink as={Link} href="/">
             Accueil
@@ -56,7 +57,7 @@ export default function AppNavBar() {
             Chat
           </HeroLink>
         </NavbarItem>
-      </NavbarContent> */}
+      </NavbarContent>
 
       <NavbarContent justify="end" className="items-center gap-4">
         <NavbarItem>

@@ -2,6 +2,19 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type Conversation {
+  createdAt: DateTime!
+  id: ID!
+  title: String
+  type: ConversationType!
+  updatedAt: DateTime!
+}
+
+enum ConversationType {
+  DIRECT
+  GROUP
+}
+
 input CreateUserInput {
   email: String!
   name: String
