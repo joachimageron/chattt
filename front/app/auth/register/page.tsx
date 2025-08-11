@@ -1,49 +1,52 @@
 "use client";
 
-import { useState, FormEvent } from "react";
-import { Button, Input, Link, Form, Divider, addToast } from "@heroui/react";
+import { useState, FormEvent, useEffect } from "react";
+import { Button, Input, Link, Form } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/providers/AuthProvider";
 
 export default function Page() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
+    useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { register, isLoading: authLoading } = useAuth();
-  
+  const { register, isLoading: authLoading, user } = useAuth();
+
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [email, setEmail] = useState<string>("");
-  
+
   const errorPassword: string[] = [];
   let errorConfirmPassword: string | null = null;
-  
-  const togglePasswordVisibility = () => setIsPasswordVisible(!isPasswordVisible);
-  const toggleConfirmPasswordVisibility = () => setIsConfirmPasswordVisible(!isConfirmPasswordVisible);
-  
+
+  const togglePasswordVisibility = () =>
+    setIsPasswordVisible(!isPasswordVisible);
+  const toggleConfirmPasswordVisibility = () =>
+    setIsConfirmPasswordVisible(!isConfirmPasswordVisible);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
-    
+
     if (password !== confirmPassword) {
       setLoading(false);
       return;
     }
-    
+
     // Vérifiez que le mot de passe est suffisamment fort
     if (errorPassword.length > 0) {
       setLoading(false);
       return;
     }
-    
+
     try {
       await register({
         email,
-        password
+        password,
       });
-      
+
       // Redirection après l'inscription réussie
       router.push("/auth/signin");
     } catch (error) {
@@ -53,17 +56,17 @@ export default function Page() {
       setLoading(false);
     }
   };
-  
+
   const errorMessages = () => {
     return (
       <ul>
         {errorPassword.map((error, i) => (
-          <li key={i+"dd"}>{error}</li>
+          <li key={i + "dd"}>{error}</li>
         ))}
       </ul>
-    )
-  }
-  
+    );
+  };
+
   if (password.length > 0) {
     if (password.length < 4) {
       errorPassword.push("Password must be 4 characters or more.");
@@ -78,17 +81,28 @@ export default function Page() {
       errorConfirmPassword = "Passwords do not match.";
     }
   }
-  
+
+  useEffect(() => {
+    if (user) {
+      router.push("/");
+    }
+  }, [user, router]);
+
   return (
     <div className="flex h-[90vh] w-full items-center justify-center">
       <div className="flex w-full max-w-sm flex-col gap-4 rounded-large bg-content1 px-8 py-6 shadow-small">
         <div className="flex flex-col gap-1">
           <h1 className="text-large font-medium">Create an account</h1>
-          <p className="text-small text-default-500">to continue to BypolarMedia</p>
+          <p className="text-small text-default-500">
+            to continue to BypolarMedia
+          </p>
         </div>
-        
-        <Form className="flex flex-col gap-3" validationBehavior="native" onSubmit={handleSubmit}>
-          
+
+        <Form
+          className="flex flex-col gap-3"
+          validationBehavior="native"
+          onSubmit={handleSubmit}
+        >
           <Input
             isRequired
             label="Email Address"
@@ -153,11 +167,11 @@ export default function Page() {
             isInvalid={!!errorConfirmPassword}
             errorMessage={errorConfirmPassword}
           />
-          
-          <Button 
-            isLoading={loading || authLoading} 
-            className="w-full" 
-            color="primary" 
+
+          <Button
+            isLoading={loading || authLoading}
+            className="w-full"
+            color="primary"
             type="submit"
             disabled={errorPassword.length > 0 || !!errorConfirmPassword}
           >

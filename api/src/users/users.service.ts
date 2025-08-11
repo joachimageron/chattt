@@ -146,4 +146,14 @@ export class UsersService {
       throw new InternalServerErrorException('Failed to update user');
     }
   }
+
+  async updatePassword(
+    userId: string,
+    newPlainPassword: string,
+  ): Promise<void> {
+    const user = await this.findOne(userId);
+    const salt = await bcrypt.genSalt();
+    user.password = await bcrypt.hash(newPlainPassword, salt);
+    await this.usersRepository.save(user);
+  }
 }

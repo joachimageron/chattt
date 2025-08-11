@@ -6,6 +6,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { AuthController } from './auth.controller';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { PasswordResetToken } from './entities/password-reset-token.entity';
+import { MailService } from './mail/mail.service';
 
 @Module({
   imports: [
@@ -19,8 +23,10 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         signOptions: { expiresIn: '24h' },
       }),
     }),
+    TypeOrmModule.forFeature([PasswordResetToken]),
   ],
-  providers: [AuthService, AuthResolver, JwtStrategy],
+  controllers: [AuthController],
+  providers: [AuthService, AuthResolver, JwtStrategy, MailService],
   exports: [AuthService],
 })
 export class AuthModule {}

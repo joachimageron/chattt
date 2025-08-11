@@ -1,89 +1,68 @@
 "use client";
 
 import React, { useState } from "react";
-import {Button, Input, Link, Form, addToast} from "@heroui/react";
-import { useMutation } from "@tanstack/react-query";
-import { useParams, useRouter } from "next/navigation";
-import { API_URL } from "@/utils/config";
+import { Button, Input, Link, Form, addToast } from "@heroui/react";
+import { useRouter, useParams } from "next/navigation";
 import { Icon } from "@iconify/react";
+import { apiUrl } from "@/utils/apiBase";
 
-// Function to call the reset password API
-const resetPassword = async ({ token, password }: { token: string; password: string }) => {
-  const response = await fetch(`${API_URL}/api/auth/reset-password/${token}`, {
+async function resetPasswordRequest(token: string, password: string) {
+  const response = await fetch(apiUrl(`/api/auth/reset-password/${token}`), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password }),
     credentials: "include",
   });
-
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || "Failed to reset password");
+    let message = "Failed to reset password";
+    try {
+      const data = await response.json();
+      message = data.message || message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
   }
-
   return response.json();
-};
+}
 
 export default function Page() {
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
-  const params = useParams();
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
+    useState(false);
   const router = useRouter();
+  const params = useParams();
   const resetToken = params.resetLinkToken as string;
 
-  const togglePasswordVisibility = () => setIsPasswordVisible(!isPasswordVisible);
-  const toggleConfirmPasswordVisibility = () => setIsConfirmPasswordVisible(!isConfirmPasswordVisible);
+  const valid = pw.length >= 6 && pw === pw2;
 
-  // Use React Query mutation for state management
-  const resetPasswordMutation = useMutation({
-    mutationFn: (password: string) => resetPassword({ token: resetToken, password }),
-    onSuccess: () => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    if (!valid) {
+      setError("Passwords must match and be at least 6 characters.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await resetPasswordRequest(resetToken, pw);
       addToast({
         title: "Password reset",
-        description: "Your password has been reset successfully.",
+        description: "Your password has been reset.",
         color: "success",
       });
-      
-      // Redirect to login page after successful password reset
-      setTimeout(() => {
-        router.push("/auth/signin");
-      }, 2000);
-    },
-    onError: (error: Error) => {
-      setError(error.message || "Failed to reset password. The link may be expired or invalid.");
-    },
-    onSettled: () => {
+      setTimeout(() => router.push("/auth/signin"), 1500);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to reset password";
+      setError(message);
+    } finally {
       setLoading(false);
     }
-  });
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const data = new FormData(event.currentTarget);
-    const password = data.get("password");
-    const confirmPassword = data.get("confirmPassword");
-
-    if (!password || !confirmPassword) {
-      setError("Both fields are required.");
-      setLoading(false);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      setLoading(false);
-      return;
-    }
-
-    // Call the mutation to reset the password
-    resetPasswordMutation.mutate(password as string);
   };
 
   return (
@@ -93,8 +72,11 @@ export default function Page() {
           <h1 className="text-large font-medium">Reset your password</h1>
           <p className="text-small text-default-500">Enter your new password</p>
         </div>
-
-        <Form className="flex flex-col gap-3" validationBehavior="native" onSubmit={handleSubmit}>
+        <Form
+          className="flex flex-col gap-3"
+          validationBehavior="native"
+          onSubmit={handleSubmit}
+        >
           <Input
             isRequired
             label="New Password"
@@ -102,8 +84,13 @@ export default function Page() {
             placeholder="Enter your new password"
             type={isPasswordVisible ? "text" : "password"}
             variant="bordered"
+            value={pw}
+            onValueChange={setPw}
             endContent={
-              <button type="button" onClick={togglePasswordVisibility}>
+              <button
+                type="button"
+                onClick={() => setIsPasswordVisible((v) => !v)}
+              >
                 {isPasswordVisible ? (
                   <Icon
                     className="pointer-events-none text-xl text-default-400"
@@ -117,6 +104,7 @@ export default function Page() {
                 )}
               </button>
             }
+            autoComplete="new-password"
           />
           <Input
             isRequired
@@ -125,8 +113,13 @@ export default function Page() {
             placeholder="Confirm your new password"
             type={isConfirmPasswordVisible ? "text" : "password"}
             variant="bordered"
+            value={pw2}
+            onValueChange={setPw2}
             endContent={
-              <button type="button" onClick={toggleConfirmPasswordVisibility}>
+              <button
+                type="button"
+                onClick={() => setIsConfirmPasswordVisible((v) => !v)}
+              >
                 {isConfirmPasswordVisible ? (
                   <Icon
                     className="pointer-events-none text-xl text-default-400"
@@ -140,13 +133,25 @@ export default function Page() {
                 )}
               </button>
             }
+            autoComplete="new-password"
           />
-          {error && <p className="text-red-500">{error}</p>}
-          <Button isLoading={loading || resetPasswordMutation.isPending} className="w-full" color="primary" type="submit">
+          {pw && pw.length < 6 && (
+            <p className="text-tiny text-danger">Minimum 6 characters</p>
+          )}
+          {pw && pw2 && pw !== pw2 && (
+            <p className="text-tiny text-danger">Passwords do not match</p>
+          )}
+          {error && <p className="text-tiny text-danger">{error}</p>}
+          <Button
+            isLoading={loading}
+            className="w-full"
+            color="primary"
+            type="submit"
+            isDisabled={!valid || loading}
+          >
             Reset Password
           </Button>
         </Form>
-
         <p className="text-center text-small">
           Changed your mind?&nbsp;
           <Link href="/auth/signin" size="sm">

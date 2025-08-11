@@ -31,12 +31,14 @@
     "@nestjs/platform-socket.io": "^11.0.20",
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.0.20",
+    "@types/nodemailer": "^6.4.17",
     "apollo-server-express": "^3.13.0",
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "cookie-parser": "^1.4.7",
     "graphql": "^16.10.0",
+    "nodemailer": "^7.0.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.14.1",
@@ -98,5 +100,9 @@
       "@swc/core",
       "bcrypt"
     ]
-  }
+  },
+  "trustedDependencies": [
+    "@nestjs/core",
+    "@swc/core"
+  ]
 }

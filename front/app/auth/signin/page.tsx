@@ -1,40 +1,53 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useCallback } from "react";
 import { Button, Input, Link, Form, Checkbox } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { useAuth } from "@/app/components/providers/AuthProvider";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function Page() {
   const [isVisible, setIsVisible] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
-  const {user, login, isLoading: authLoading} = useAuth();
-  
-  console.log("User:", user);
+  const { user, login, isLoading: authLoading } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromParam = searchParams.get("from");
+
+  // Fonction utilitaire pour déterminer la destination sûre
+  const getRedirectTarget = useCallback(() => {
+    if (!fromParam) return "/";
+    // Empêcher boucle si from pointe vers une page auth
+    if (fromParam.startsWith("/auth/")) return "/";
+    // Doit commencer par / (sécurité basique contre URLs externes)
+    if (!fromParam.startsWith("/")) return "/";
+    return fromParam;
+  }, [fromParam]);
 
   const toggleVisibility = () => setIsVisible(!isVisible);
-  
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
-    
+
     const formData = new FormData(event.currentTarget);
-    
+
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
-    
+
     if (!email || !password) {
       setLoading(false);
       return;
     }
-    
+
     try {
       // Utilise la fonction login du contexte d'authentification
       const loginData = await login({ email, password });
       console.log("Login data:", loginData);
-      
+
       // Redirection après la connexion réussie
       // router.push("/dashboard"); // ou toute autre page après la connexion
+      router.push(getRedirectTarget());
     } catch (error) {
       console.error("Error during sign in:", error);
       // Les toasts d'erreur sont déjà gérés dans le provider
@@ -42,16 +55,28 @@ export default function Page() {
       setLoading(false);
     }
   };
-  
+
+  useEffect(() => {
+    if (user) {
+      router.push("/");
+    }
+  }, [user, router]);
+
   return (
     <div className="flex h-[90vh] w-full items-center justify-center">
       <div className="flex w-full max-w-sm flex-col gap-4 rounded-large bg-content1 px-8 py-6 shadow-small">
         <div className="flex flex-col gap-1">
           <h1 className="text-large font-medium">Sign in to your account</h1>
-          <p className="text-small text-default-500">to continue to BypolarMedia</p>
+          <p className="text-small text-default-500">
+            to continue to BypolarMedia
+          </p>
         </div>
-        
-        <Form className="flex flex-col gap-3" validationBehavior="native" onSubmit={handleSubmit}>
+
+        <Form
+          className="flex flex-col gap-3"
+          validationBehavior="native"
+          onSubmit={handleSubmit}
+        >
           <Input
             isRequired
             label="Email Address"
@@ -87,14 +112,18 @@ export default function Page() {
             <Checkbox name="remember" size="sm">
               Remember me
             </Checkbox>
-            <Link className="text-default-500" href="/auth/forgot_password" size="sm">
+            <Link
+              className="text-default-500"
+              href="/auth/forgot_password"
+              size="sm"
+            >
               Forgot password?
             </Link>
           </div>
-          <Button 
-            isLoading={loading || authLoading} 
-            className="w-full" 
-            color="primary" 
+          <Button
+            isLoading={loading || authLoading}
+            className="w-full"
+            color="primary"
             type="submit"
           >
             Sign In
