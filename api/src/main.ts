@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import * as cookieParser from 'cookie-parser';
+import { AuthenticatedSocketIoAdapter } from './chat/adapters/ws.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -23,6 +24,8 @@ async function bootstrap() {
 
   // Parse cookies
   app.use(cookieParser());
+
+  app.useWebSocketAdapter(new AuthenticatedSocketIoAdapter(app));
 
   await app.listen(process.env.PORT ?? 4000);
   console.log(`Application is running on: ${await app.getUrl()}`);
