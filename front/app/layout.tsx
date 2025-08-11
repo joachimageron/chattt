@@ -1,7 +1,7 @@
-import './styles/global.css';
-import type {Metadata} from "next";
+import "./styles/global.css";
+import type { Metadata } from "next";
 import Providers from "@/app/components/providers/Providers";
-
+import AppNavBar from "@/app/components/navigation/AppNavBar";
 
 export const metadata: Metadata = {
   title: "Chattt",
@@ -15,11 +15,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={""}>
-    <body>
-    <Providers>
-      {children}
-    </Providers>
-    </body>
+      <body>
+        <Providers>
+          <AppNavBar />
+          {children}
+        </Providers>
+      </body>
     </html>
   );
 }
