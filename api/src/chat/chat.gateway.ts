@@ -4,14 +4,18 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
+  MessageBody,
+  ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { User } from '../users/entities/user.entity';
+import { ChatService } from './chat.service';
+import { SendMessageInput } from './dto/send-message.input';
 
 // augment Socket type locally
 interface AuthedSocket extends Socket {
-  data: { user?: User };
+  data: { user?: User; joinedRooms?: Set<string> };
 }
 
 @WebSocketGateway({
@@ -24,11 +28,14 @@ interface AuthedSocket extends Socket {
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
 
+  constructor(private readonly chatService: ChatService) {}
+
   @WebSocketServer()
   server: Server;
 
   handleConnection(client: AuthedSocket) {
     const user = client.data.user;
+    client.data.joinedRooms = new Set();
     this.logger.log(
       `Client connected: ${client.id}${user ? ' user=' + user.email : ''}`,
     );
@@ -42,11 +49,185 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('ping')
-  handlePing(client: AuthedSocket) {
+  handlePing(@ConnectedSocket() client: AuthedSocket) {
     this.logger.log(
       `Received ping from ${client.data.user?.email || 'unknown user'}`,
     );
     const user = client.data.user;
     client.emit('pong', { message: 'pong', userId: user?.email });
+  }
+
+  @SubscribeMessage('room.join')
+  async handleJoin(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: { conversationId: string },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    const { conversationId } = payload;
+    try {
+      await this.chatService.ensureParticipant(conversationId, user.id);
+      await client.join(conversationId);
+      client.data.joinedRooms?.add(conversationId);
+      client.emit('room.joined', { conversationId });
+    } catch (e) {
+      client.emit('error', {
+        message: 'join_failed',
+        details: (e as Error).message,
+      });
+    }
+  }
+
+  @SubscribeMessage('room.leave')
+  async handleLeave(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: { conversationId: string },
+  ) {
+    const { conversationId } = payload;
+    await client.leave(conversationId);
+    client.data.joinedRooms?.delete(conversationId);
+    client.emit('room.left', { conversationId });
+  }
+
+  @SubscribeMessage('message.send')
+  async handleSend(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() body: SendMessageInput & { tempId?: string },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    try {
+      const message = await this.chatService.sendMessage(body, user);
+      this.server.to(message.conversationId).emit('message.new', message);
+      client.emit('message.sent', { tempId: body.tempId, message });
+    } catch (e) {
+      client.emit('message.error', { error: (e as Error).message });
+    }
+  }
+
+  @SubscribeMessage('message.load')
+  async handleLoad(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody()
+    body: { conversationId: string; before?: string; limit?: number },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    try {
+      await this.chatService.ensureParticipant(body.conversationId, user.id);
+      const messages = await this.chatService.getMessages(
+        body.conversationId,
+        body.limit ?? 30,
+        body.before ? new Date(body.before) : undefined,
+      );
+      client.emit('message.list', {
+        conversationId: body.conversationId,
+        messages,
+        hasMore: messages.length === (body.limit ?? 30),
+      });
+    } catch (e) {
+      client.emit('message.error', { error: (e as Error).message });
+    }
+  }
+
+  @SubscribeMessage('message.delivered')
+  async handleDelivered(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody()
+    body: { conversationId: string; messageIds: string[] },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    try {
+      await this.chatService.markDelivered(
+        body.conversationId,
+        body.messageIds,
+        user.id,
+      );
+      this.server
+        .to(body.conversationId)
+        .emit('message.delivered', { messageIds: body.messageIds });
+    } catch (e) {
+      client.emit('message.error', { error: (e as Error).message });
+    }
+  }
+
+  @SubscribeMessage('message.read')
+  async handleRead(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody()
+    body: { conversationId: string; messageIds: string[] },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    try {
+      await this.chatService.markReadMessages(
+        body.conversationId,
+        body.messageIds,
+        user.id,
+      );
+      this.server
+        .to(body.conversationId)
+        .emit('message.read', { messageIds: body.messageIds, userId: user.id });
+    } catch (e) {
+      client.emit('message.error', { error: (e as Error).message });
+    }
+  }
+
+  @SubscribeMessage('message.edit')
+  async handleEdit(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody()
+    body: { messageId: string; content: string; conversationId: string },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    try {
+      const updated = await this.chatService.editMessage(
+        body.messageId,
+        user.id,
+        body.content,
+      );
+      this.server
+        .to(body.conversationId)
+        .emit('message.updated', { message: updated });
+    } catch (e) {
+      client.emit('message.error', { error: (e as Error).message });
+    }
+  }
+
+  @SubscribeMessage('message.delete')
+  async handleDelete(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody()
+    body: { messageId: string; conversationId: string },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    try {
+      const deleted = await this.chatService.deleteMessage(
+        body.messageId,
+        user.id,
+      );
+      this.server
+        .to(body.conversationId)
+        .emit('message.deleted', { messageId: deleted.id });
+    } catch (e) {
+      client.emit('message.error', { error: (e as Error).message });
+    }
+  }
+
+  @SubscribeMessage('conversation.list')
+  async handleListConversations(@ConnectedSocket() client: AuthedSocket) {
+    const user = client.data.user;
+    if (!user) return;
+    try {
+      const conversations = await this.chatService.listConversationsForUser(
+        user.id,
+      );
+      client.emit('conversation.list', { conversations });
+    } catch (e) {
+      client.emit('error', { message: (e as Error).message });
+    }
   }
 }
