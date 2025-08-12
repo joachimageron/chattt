@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useCallback } from "react";
+import { addToast } from "@heroui/react";
 import { getSocket, ChatMessage } from "./socketClient";
 import { MessageStatus, MessageType, ConversationSummary } from "./types";
 import { useAuth } from "../providers/AuthProvider";
@@ -46,7 +47,17 @@ export function useChatSocket() {
       chat.updateMessage(message);
     };
     const onMessageDeleted = ({ messageId }: { messageId: string }) => {
-      const convId = chat.activeConversationId; // fallback
+      // Attempt to find which conversation contains this message (search last loaded conv first)
+      let convId = chat.activeConversationId;
+      if (!convId) {
+        // fallback linear scan (small lists typical in UI state)
+        for (const [cid, list] of Object.entries(chat.messages)) {
+          if (list.find((m) => m.id === messageId)) {
+            convId = cid;
+            break;
+          }
+        }
+      }
       if (convId) chat.deleteMessage(convId, messageId);
     };
     const onConversationCreated = (payload: {
@@ -72,6 +83,14 @@ export function useChatSocket() {
       chat.upsertMessages(payload.conversationId, payload.messages);
     };
 
+    const onMessageError = (payload: { error: string }) => {
+      addToast({
+        title: "Erreur message",
+        description: payload.error,
+        color: "danger",
+      });
+    };
+
     socket.on("connect", onConnect);
     socket.on("error", onError);
     socket.on("conversation.list", onConversationList);
@@ -82,6 +101,7 @@ export function useChatSocket() {
     socket.on("conversation.created", onConversationCreated);
     socket.on("conversation.updated", onConversationUpdated);
     socket.on("message.list", onMessageList);
+    socket.on("message.error", onMessageError);
 
     return () => {
       socket.off("connect", onConnect);
@@ -94,6 +114,7 @@ export function useChatSocket() {
       socket.off("conversation.created", onConversationCreated);
       socket.off("conversation.updated", onConversationUpdated);
       socket.off("message.list", onMessageList);
+      socket.off("message.error", onMessageError);
     };
   }, [user, chat]);
 
@@ -142,6 +163,26 @@ export function useChatSocket() {
     socketRef.current.emit("room.join", { conversationId });
   }, []);
 
+  const editMessage = useCallback(
+    (messageId: string, conversationId: string, content: string) => {
+      if (!socketRef.current) return;
+      socketRef.current.emit("message.edit", {
+        messageId,
+        conversationId,
+        content,
+      });
+    },
+    []
+  );
+
+  const deleteMessage = useCallback(
+    (messageId: string, conversationId: string) => {
+      if (!socketRef.current) return;
+      socketRef.current.emit("message.delete", { messageId, conversationId });
+    },
+    []
+  );
+
   const createConversation = useCallback(
     (
       participantUserIds: string[],
@@ -165,5 +206,12 @@ export function useChatSocket() {
     }
   }, [chat.activeConversationId, joinConversation, loadMessages]);
 
-  return { sendMessage, loadMessages, joinConversation, createConversation };
+  return {
+    sendMessage,
+    loadMessages,
+    joinConversation,
+    createConversation,
+    editMessage,
+    deleteMessage,
+  };
 }

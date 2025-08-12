@@ -26,6 +26,16 @@ export function MessageItem({ message, onEdit, onDelete }: MessageItemProps) {
     return <span>{message.content}</span>;
   }, [message]);
 
+  const { canEdit, canDelete } = useMemo(() => {
+    const res = { canEdit: false, canDelete: false };
+    if (!isMine || message.isDeleted) return res;
+    const created = new Date(message.createdAt).getTime();
+    const within = Date.now() - created <= 15 * 60 * 1000; // 15 minutes
+    res.canEdit = within;
+    res.canDelete = within; // même fenêtre pour suppression
+    return res;
+  }, [isMine, message]);
+
   return (
     <div
       className={`group flex gap-2 ${isMine ? "justify-end" : "justify-start"}`}
@@ -38,39 +48,59 @@ export function MessageItem({ message, onEdit, onDelete }: MessageItemProps) {
           }
         />
       )}
-      <Dropdown placement={isMine ? "left-start" : "right-start"}>
-        <DropdownTrigger>
-          <div
-            className={`max-w-xs rounded-medium px-3 py-2 text-sm cursor-pointer transition-colors bg-content2 hover:bg-content3 shadow-sm border border-transparent group-hover:border-default-200 ${
-              isMine ? "bg-primary-500/10" : ""
-            }`}
-          >
-            {content}
-            {!message.isDeleted && message.editedAt && (
-              <span className="ml-2 text-[10px] text-default-400">(édité)</span>
-            )}
-          </div>
-        </DropdownTrigger>
-        {!message.isDeleted && (
-          <DropdownMenu
-            aria-label="Actions message"
-            variant="flat"
-            disabledKeys={isMine ? [] : ["edit", "delete"]}
-          >
-            <DropdownItem key="edit" onPress={() => onEdit?.(message.id)}>
-              Éditer
-            </DropdownItem>
-            <DropdownItem
-              key="delete"
-              className="text-danger"
-              color="danger"
-              onPress={() => onDelete?.(message.id)}
+      {isMine ? (
+        <Dropdown placement="left-start">
+          <DropdownTrigger>
+            <div
+              className={`max-w-xs rounded-medium px-3 py-2 text-sm cursor-pointer transition-colors bg-content2 hover:bg-content3 shadow-sm border border-transparent group-hover:border-default-200 ${
+                isMine ? "bg-primary-500/10" : ""
+              }`}
             >
-              Supprimer
-            </DropdownItem>
-          </DropdownMenu>
-        )}
-      </Dropdown>
+              {content}
+              {!message.isDeleted && message.editedAt && (
+                <span className="ml-2 text-[10px] text-default-400">
+                  (édité)
+                </span>
+              )}
+            </div>
+          </DropdownTrigger>
+          {!message.isDeleted && (
+            <DropdownMenu
+              aria-label="Actions message"
+              variant="flat"
+              disabledKeys={(() => {
+                const disabled: string[] = [];
+                if (!canEdit) disabled.push("edit");
+                if (!canDelete) disabled.push("delete");
+                return disabled;
+              })()}
+            >
+              <DropdownItem key="edit" onPress={() => onEdit?.(message.id)}>
+                Éditer
+              </DropdownItem>
+              <DropdownItem
+                key="delete"
+                className="text-danger"
+                color="danger"
+                onPress={() => onDelete?.(message.id)}
+              >
+                Supprimer
+              </DropdownItem>
+            </DropdownMenu>
+          )}
+        </Dropdown>
+      ) : (
+        <div
+          className={`max-w-xs rounded-medium px-3 py-2 text-sm bg-content2 shadow-sm border border-transparent ${
+            message.isDeleted ? "bg-transparent" : "" // placeholder for potential future styling
+          }`}
+        >
+          {content}
+          {!message.isDeleted && message.editedAt && (
+            <span className="ml-2 text-[10px] text-default-400">(édité)</span>
+          )}
+        </div>
+      )}
       {isMine && (
         <Avatar
           size="sm"

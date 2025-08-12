@@ -118,6 +118,13 @@ export class ChatService {
     if (message.senderId !== userId)
       throw new ForbiddenException('Cannot edit this message');
     if (message.isDeleted) throw new ForbiddenException('Message deleted');
+    // Enforce 15-minute edit window
+    const EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+    const now = Date.now();
+    const created = message.createdAt?.getTime?.() ?? 0;
+    if (now - created > EDIT_WINDOW_MS) {
+      throw new ForbiddenException('Edit window expired');
+    }
     message.content = content;
     message.editedAt = new Date();
     return this.messageRepo.save(message);
@@ -130,6 +137,12 @@ export class ChatService {
     if (!message) throw new NotFoundException('Message not found');
     if (message.senderId !== userId)
       throw new ForbiddenException('Cannot delete this message');
+    const DELETE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+    const now = Date.now();
+    const created = message.createdAt?.getTime?.() ?? 0;
+    if (now - created > DELETE_WINDOW_MS) {
+      throw new ForbiddenException('Delete window expired');
+    }
     message.isDeleted = true;
     message.content = '';
     return this.messageRepo.save(message);

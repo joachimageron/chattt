@@ -106,10 +106,7 @@ export function ConversationList({ onSelect }: ConversationListProps) {
           // Fallback title logic for direct conversations without explicit title
           let displayTitle = c.title;
           if (!displayTitle && c.type === "DIRECT" && user) {
-            console.log("Direct conversation without title:", c);
             const other = c.participants.find((p) => p.userId !== user.id);
-            console.log("Other participant:", other);
-            // backend now loads participant.user; attempt to show name or email
             if (other?.user) {
               displayTitle = other.user.name || other.user.email;
             }
