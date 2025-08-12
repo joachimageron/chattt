@@ -55,55 +55,57 @@ export function MessageItem({
         />
       )}
       {isMine ? (
-        <Dropdown placement="left-start">
-          <DropdownTrigger>
-            <div
-              className={`relative max-w-xs rounded-medium px-3 py-2 text-sm cursor-pointer transition-colors bg-content2 hover:bg-content3 shadow-sm border border-transparent group-hover:border-default-200 ${
-                isMine ? "bg-primary-500/10" : ""
-              }`}
-            >
-              {content}
-              {!message.isDeleted && message.editedAt && (
-                <span className="ml-2 text-[10px] text-default-400">
-                  (édité)
-                </span>
-              )}
-              {showStatus && (
-                <span className="block mt-1 text-[10px] text-default-400 text-right select-none">
-                  {message.status === "SENT" && "✓"}
-                  {message.status === "DELIVERED" && "✓✓"}
-                  {message.status === "READ" && (
-                    <span className="text-primary-500">✓✓</span>
-                  )}
-                </span>
-              )}
-            </div>
-          </DropdownTrigger>
-          {!message.isDeleted && (
-            <DropdownMenu
-              aria-label="Actions message"
-              variant="flat"
-              disabledKeys={(() => {
-                const disabled: string[] = [];
-                if (!canEdit) disabled.push("edit");
-                if (!canDelete) disabled.push("delete");
-                return disabled;
-              })()}
-            >
-              <DropdownItem key="edit" onPress={() => onEdit?.(message.id)}>
-                Éditer
-              </DropdownItem>
-              <DropdownItem
-                key="delete"
-                className="text-danger"
-                color="danger"
-                onPress={() => onDelete?.(message.id)}
+        <div className="flex flex-col">
+          <Dropdown placement="left-start">
+            <DropdownTrigger>
+              <div
+                className={`relative max-w-xs rounded-medium px-3 py-2 text-sm cursor-pointer transition-colors bg-content2 hover:bg-content3 shadow-sm border border-transparent group-hover:border-default-200 ${
+                  isMine ? "bg-primary-500/10" : ""
+                }`}
               >
-                Supprimer
-              </DropdownItem>
-            </DropdownMenu>
+                {content}
+                {!message.isDeleted && message.editedAt && (
+                  <span className="ml-2 text-[10px] text-default-400">
+                    (édité)
+                  </span>
+                )}
+              </div>
+            </DropdownTrigger>
+            {!message.isDeleted && (
+              <DropdownMenu
+                aria-label="Actions message"
+                variant="flat"
+                disabledKeys={(() => {
+                  const disabled: string[] = [];
+                  if (!canEdit) disabled.push("edit");
+                  if (!canDelete) disabled.push("delete");
+                  return disabled;
+                })()}
+              >
+                <DropdownItem key="edit" onPress={() => onEdit?.(message.id)}>
+                  Éditer
+                </DropdownItem>
+                <DropdownItem
+                  key="delete"
+                  className="text-danger"
+                  color="danger"
+                  onPress={() => onDelete?.(message.id)}
+                >
+                  Supprimer
+                </DropdownItem>
+              </DropdownMenu>
+            )}
+          </Dropdown>
+          {showStatus && (
+            <span className="block text-[14px] text-default-400 text-right select-none">
+              {message.status === "SENT" && "✓"}
+              {message.status === "DELIVERED" && "✓✓"}
+              {message.status === "READ" && (
+                <span className="text-primary-500">✓✓</span>
+              )}
+            </span>
           )}
-        </Dropdown>
+        </div>
       ) : (
         <div
           className={`max-w-xs rounded-medium px-3 py-2 text-sm bg-content2 shadow-sm border border-transparent ${
@@ -116,6 +118,7 @@ export function MessageItem({
           )}
         </div>
       )}
+
       {isMine && (
         <Avatar
           size="sm"

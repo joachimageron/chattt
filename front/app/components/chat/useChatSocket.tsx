@@ -170,6 +170,12 @@ export function useChatSocket() {
       }
     );
     socket.on("message.error", onMessageError);
+    socket.on(
+      "participant.read",
+      (p: { conversationId: string; userId: string; lastReadAt?: string }) => {
+        chat.updateParticipantRead(p.conversationId, p.userId, p.lastReadAt);
+      }
+    );
 
     return () => {
       socket.off("connect", onConnect);
@@ -183,6 +189,7 @@ export function useChatSocket() {
       socket.off("conversation.updated", onConversationUpdated);
       socket.off("message.list", onMessageList);
       socket.off("message.error", onMessageError);
+      socket.off("participant.read");
       socket.off("message.delivered");
       socket.off("message.read");
     };

@@ -17,6 +17,11 @@ interface ChatContextValue {
   setActiveConversation: (id: string | null) => void;
   setConversations: (convs: ConversationSummary[]) => void;
   upsertConversation: (c: ConversationSummary) => void;
+  updateParticipantRead: (
+    conversationId: string,
+    userId: string,
+    lastReadAt: string | undefined
+  ) => void;
   upsertMessages: (
     conversationId: string,
     msgs: ChatMessage[],
@@ -116,6 +121,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const updateParticipantRead = useCallback(
+    (
+      conversationId: string,
+      userId: string,
+      lastReadAt: string | undefined
+    ) => {
+      setConversationsState((prev) => {
+        const conv = prev[conversationId];
+        if (!conv) return prev;
+        const participants = conv.participants.map((p) =>
+          p.userId === userId ? { ...p, lastReadAt } : p
+        );
+        return { ...prev, [conversationId]: { ...conv, participants } };
+      });
+    },
+    []
+  );
+
   const value: ChatContextValue = useMemo(
     () => ({
       conversations,
@@ -128,6 +151,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       updateMessage,
       deleteMessage,
       confirmMessage,
+      updateParticipantRead,
     }),
     [
       conversations,
@@ -139,6 +163,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       updateMessage,
       deleteMessage,
       confirmMessage,
+      updateParticipantRead,
     ]
   );
 

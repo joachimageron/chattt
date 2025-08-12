@@ -172,11 +172,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         body.messageIds,
         user.id,
       );
+      // Récupère la date de lecture de ce participant pour mise à jour fine côté front
+      const participant = await this.chatService.ensureParticipant(
+        body.conversationId,
+        user.id,
+      );
       this.server.to(body.conversationId).emit('message.read', {
         messageIds: body.messageIds,
         userId: user.id,
         conversationId: body.conversationId,
         readAt: new Date().toISOString(),
+      });
+      this.server.to(body.conversationId).emit('participant.read', {
+        conversationId: body.conversationId,
+        userId: user.id,
+        lastReadAt: participant.lastReadAt?.toISOString?.(),
       });
     } catch (e) {
       client.emit('message.error', { error: (e as Error).message });
