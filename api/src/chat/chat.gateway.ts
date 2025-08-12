@@ -14,6 +14,7 @@ import { ChatService } from './chat.service';
 import { SendMessageInput } from './dto/send-message.input';
 import { CreateConversationInput } from './dto/create-conversation.input';
 import { sanitizeConversation, sanitizeMessage } from './sanitize';
+import { UpdateConversationTitleInput } from './dto/update-conversation-title.input';
 
 // augment Socket type locally
 interface AuthedSocket extends Socket {
@@ -260,6 +261,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
             conversation: sanitizeConversation(convo),
           });
         });
+    } catch (e) {
+      client.emit('error', { message: (e as Error).message });
+    }
+  }
+
+  @SubscribeMessage('conversation.title.update')
+  async handleUpdateConversationTitle(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() body: UpdateConversationTitleInput,
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    try {
+      const convo = await this.chatService.updateConversationTitle(
+        body.conversationId,
+        user.id,
+        body.title,
+      );
+      this.server.to(convo.id).emit('conversation.updated', {
+        conversation: sanitizeConversation(convo),
+      });
     } catch (e) {
       client.emit('error', { message: (e as Error).message });
     }

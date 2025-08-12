@@ -5,7 +5,7 @@ import { useAuth } from "../components/providers/AuthProvider";
 import { ConversationList } from "../components/chat/ConversationList";
 import { MessageList } from "../components/chat/MessageList";
 import { MessageInput } from "../components/chat/MessageInput";
-import { Spinner } from "@heroui/react";
+import { Spinner, Button, Input, Tooltip } from "@heroui/react";
 import { useChat } from "../components/chat/ChatContext";
 import type { ChatMessage } from "../components/chat/socketClient";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -18,6 +18,7 @@ export default function ChatPage() {
     loadMessages,
     editMessage,
     deleteMessage,
+    updateConversationTitle,
   } = useChatSocket();
   const chat = useChat();
   const { activeConversationId, messages, setActiveConversation } = chat;
@@ -25,6 +26,8 @@ export default function ChatPage() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingInitialContent, setEditingInitialContent] =
     useState<string>("");
+  const [editingGroupTitle, setEditingGroupTitle] = useState(false);
+  const [groupTitleValue, setGroupTitleValue] = useState("");
   const startEdit = useCallback(
     (id: string) => {
       if (!activeConversationId) return;
@@ -121,6 +124,44 @@ export default function ChatPage() {
     }
   }, [activeConversationId, joinConversation, loadMessages]);
 
+  // Determine current conversation + display title early (before conditional returns)
+  const currentConversation = activeConversationId
+    ? chat.conversations[activeConversationId]
+    : undefined;
+  const currentMessages = activeConversationId
+    ? (messages[activeConversationId] as ChatMessage[] | undefined) || []
+    : [];
+
+  // Update editable group title when conversation changes
+  useEffect(() => {
+    if (currentConversation?.type === "GROUP") {
+      setGroupTitleValue(currentConversation.title || "");
+    } else {
+      setEditingGroupTitle(false);
+      setGroupTitleValue("");
+    }
+  }, [
+    currentConversation?.id,
+    currentConversation?.title,
+    currentConversation?.type,
+  ]);
+
+  // Compute display title (reuse logic from ConversationList)
+  let displayTitle: string | undefined | null = currentConversation?.title;
+  if (
+    !displayTitle &&
+    currentConversation?.type === "DIRECT" &&
+    user &&
+    currentConversation
+  ) {
+    const other = currentConversation.participants.find(
+      (p) => p.userId !== user.id
+    );
+    if (other?.user) {
+      displayTitle = other.user.name || other.user.email;
+    }
+  }
+
   if (isLoading)
     return (
       <div className="flex items-center justify-center h-full">
@@ -129,9 +170,21 @@ export default function ChatPage() {
     );
   if (!user) return null;
 
-  const currentMessages = activeConversationId
-    ? (messages[activeConversationId] as ChatMessage[] | undefined) || []
-    : [];
+  const commitGroupTitle = () => {
+    if (
+      currentConversation &&
+      currentConversation.type === "GROUP" &&
+      groupTitleValue.trim()
+    ) {
+      updateConversationTitle(currentConversation.id, groupTitleValue.trim());
+    }
+    setEditingGroupTitle(false);
+  };
+
+  const cancelGroupTitle = () => {
+    setEditingGroupTitle(false);
+    setGroupTitleValue(currentConversation?.title || "");
+  };
 
   return (
     <div className="flex h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] bg-background">
@@ -139,6 +192,53 @@ export default function ChatPage() {
       <div className="flex-1 flex flex-col">
         {activeConversationId ? (
           <>
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-divider bg-content1/40 backdrop-blur-sm">
+              {editingGroupTitle ? (
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Input
+                    size="sm"
+                    aria-label="Titre du groupe"
+                    value={groupTitleValue}
+                    onChange={(e) => setGroupTitleValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitGroupTitle();
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        cancelGroupTitle();
+                      }
+                    }}
+                    className="flex-1"
+                    autoFocus
+                  />
+                  <Button size="sm" variant="flat" onPress={commitGroupTitle}>
+                    OK
+                  </Button>
+                  <Button size="sm" variant="light" onPress={cancelGroupTitle}>
+                    ✕
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <h2 className="text-sm font-semibold truncate">
+                    {displayTitle || "Sans titre"}
+                  </h2>
+                  {currentConversation?.type === "GROUP" && (
+                    <Tooltip content="Renommer le groupe">
+                      <Button
+                        size="sm"
+                        variant="light"
+                        isIconOnly
+                        onPress={() => setEditingGroupTitle(true)}
+                      >
+                        ✎
+                      </Button>
+                    </Tooltip>
+                  )}
+                </div>
+              )}
+            </div>
             <MessageList
               messages={currentMessages}
               onEdit={startEdit}

@@ -200,6 +200,17 @@ export function useChatSocket() {
     []
   );
 
+  const updateConversationTitle = useCallback(
+    (conversationId: string, title: string) => {
+      if (!socketRef.current) return;
+      socketRef.current.emit("conversation.title.update", {
+        conversationId,
+        title,
+      });
+    },
+    []
+  );
+
   useEffect(() => {
     if (chat.activeConversationId) {
       joinConversation(chat.activeConversationId);
@@ -214,5 +225,6 @@ export function useChatSocket() {
     createConversation,
     editMessage,
     deleteMessage,
+    updateConversationTitle,
   };
 }

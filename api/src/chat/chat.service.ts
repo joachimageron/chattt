@@ -265,4 +265,27 @@ export class ChatService {
     if (!convo) throw new NotFoundException('Conversation not found');
     return convo;
   }
+
+  async updateConversationTitle(
+    conversationId: string,
+    userId: string,
+    title: string,
+  ): Promise<Conversation> {
+    const convo = await this.convoRepo.findOne({
+      where: { id: conversationId },
+    });
+    if (!convo) throw new NotFoundException('Conversation not found');
+    if (convo.type !== ConversationType.GROUP) {
+      throw new ForbiddenException('Only group conversations can be renamed');
+    }
+    await this.ensureParticipant(conversationId, userId);
+    const trimmed = title.trim();
+    if (!trimmed) {
+      throw new ForbiddenException('Title cannot be empty');
+    }
+    if (trimmed === convo.title) return convo;
+    convo.title = trimmed.slice(0, 120);
+    await this.convoRepo.save(convo);
+    return convo;
+  }
 }
