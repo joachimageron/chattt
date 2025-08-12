@@ -98,7 +98,7 @@ export function ConversationList({ onSelect }: ConversationListProps) {
       <div className="p-3 flex items-center justify-between gap-2">
         <span className="font-semibold">Conversations</span>
         <Tooltip content="Nouvelle conversation">
-          <Button size="sm" variant="light" onPress={onOpen}>
+          <Button size="sm" variant="light" onPress={onOpen} className="">
             +
           </Button>
         </Tooltip>
@@ -155,18 +155,15 @@ export function ConversationList({ onSelect }: ConversationListProps) {
                 Nouvelle conversation
               </ModalHeader>
               <ModalBody>
-                <Input
-                  label="Titre (groupe)"
-                  placeholder="Nom du groupe"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  isDisabled={selectedUsers.length <= 1}
-                  description={
-                    selectedUsers.length <= 1
-                      ? "Ajoutez au moins 2 participants pour nommer le groupe"
-                      : undefined
-                  }
-                />
+                {selectedUsers.length > 1 && (
+                  <Input
+                    label="Titre (groupe)"
+                    placeholder="Nom du groupe"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    aria-label="Titre du groupe"
+                  />
+                )}
                 <Autocomplete
                   label="Participants"
                   placeholder={
