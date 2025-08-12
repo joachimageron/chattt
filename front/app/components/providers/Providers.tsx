@@ -4,6 +4,7 @@
 import { HeroUIProvider, ToastProvider } from "@heroui/react";
 import { AuthProvider } from "@/app/components/providers/AuthProvider";
 import { ChatProvider } from "@/app/components/chat/ChatContext";
+import { useRouter } from "next/navigation";
 
 // import {useRouter}from 'next/navigation'
 
@@ -12,9 +13,10 @@ export default function Providers({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const router = useRouter();
   return (
     <>
-      <HeroUIProvider>
+      <HeroUIProvider navigate={router.push}>
         <ToastProvider
           placement="top-center"
           toastOffset={15}

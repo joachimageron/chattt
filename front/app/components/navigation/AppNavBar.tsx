@@ -7,7 +7,6 @@ import {
   NavbarContent,
   NavbarItem,
   Button,
-  Link as HeroLink,
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
@@ -46,7 +45,7 @@ export default function AppNavBar() {
         <span className="font-bold text-xl">Chattt</span>
       </NavbarBrand>
 
-      <NavbarContent className="hidden sm:flex gap-6" justify="center">
+      {/* <NavbarContent className="hidden sm:flex gap-6" justify="center">
         <NavbarItem isActive={pathname === "/"}>
           <HeroLink as={Link} href="/">
             Accueil
@@ -57,7 +56,7 @@ export default function AppNavBar() {
             Chat
           </HeroLink>
         </NavbarItem>
-      </NavbarContent>
+      </NavbarContent> */}
 
       <NavbarContent justify="end" className="items-center gap-4">
         <NavbarItem>
@@ -95,12 +94,12 @@ export default function AppNavBar() {
               />
             </DropdownTrigger>
             <DropdownMenu aria-label="Menu utilisateur" variant="flat">
-              <DropdownItem key="profile" className="h-14 gap-2">
+              <DropdownItem key="profile" className="h-14 gap-2" href="/profile" >
                 <p className="font-semibold">Connecté en tant que</p>
                 <p className="text-small text-default-500">{user.email}</p>
               </DropdownItem>
-              <DropdownItem key="dashboard" as={Link} href="/">
-                Tableau de bord
+              <DropdownItem key="conversations" href="/chat">
+                Mes conversations
               </DropdownItem>
               <DropdownItem
                 key="logout"
