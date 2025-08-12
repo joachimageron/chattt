@@ -44,4 +44,5 @@ export const AUTH_QUERIES = {
 
 export const USER_QUERIES = {
   SEARCH_BY_EMAIL: `query SearchUsers($q: String!) { searchUsersByEmail(q: $q) { id email name } }`,
+  USER_BY_ID: `query User($id: ID!) { user(id: $id) { id email name } }`,
 };

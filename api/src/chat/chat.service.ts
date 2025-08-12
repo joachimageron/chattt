@@ -136,13 +136,19 @@ export class ChatService {
   }
 
   async listConversationsForUser(userId: string): Promise<Conversation[]> {
-    return this.convoRepo
+    // innerJoin pour vérifier que l'utilisateur courant est bien participant (selfP)
+    // leftJoinAndSelect pour récupérer TOUS les participants (p) + leur user
+    const qb = this.convoRepo
       .createQueryBuilder('c')
+      .innerJoin('c.participants', 'selfP', 'selfP.userId = :userId', {
+        userId,
+      })
       .leftJoinAndSelect('c.participants', 'p')
+      .leftJoinAndSelect('p.user', 'u')
       .leftJoinAndSelect('c.messages', 'm')
-      .where('p.userId = :userId', { userId })
-      .orderBy('m.createdAt', 'DESC')
-      .getMany();
+      .distinct(true)
+      .orderBy('c.updatedAt', 'DESC');
+    return qb.getMany();
   }
 
   async createDirectConversation(
@@ -171,7 +177,14 @@ export class ChatService {
       .having('COUNT(DISTINCT pAll.userId) = 2')
       .getOne();
 
-    if (existing) return existing;
+    if (existing) {
+      // Ensure we return a fully hydrated conversation with participants + user relations
+      const fullExisting = await this.convoRepo.findOne({
+        where: { id: existing.id },
+        relations: ['participants', 'participants.user', 'messages'],
+      });
+      return fullExisting ?? existing;
+    }
 
     let convo = this.convoRepo.create({ type: ConversationType.DIRECT });
     convo = await this.convoRepo.save(convo);
@@ -185,7 +198,12 @@ export class ChatService {
         userId: sorted[1],
       }),
     ]);
-    return convo;
+    // Reload with relations (including participant user) for consistency
+    const fullNew = await this.convoRepo.findOne({
+      where: { id: convo.id },
+      relations: ['participants', 'participants.user', 'messages'],
+    });
+    return fullNew ?? convo;
   }
 
   async createConversation(
@@ -218,7 +236,7 @@ export class ChatService {
 
     const full = await this.convoRepo.findOne({
       where: { id: convo.id },
-      relations: ['participants', 'messages'],
+      relations: ['participants', 'participants.user', 'messages'],
     });
     if (!full) return convo; // fallback (should not happen)
     return full;

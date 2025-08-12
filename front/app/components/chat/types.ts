@@ -14,6 +14,8 @@ export enum MessageStatus {
 export interface ConversationParticipant {
   userId: string;
   lastReadAt?: string;
+  // When loaded from conversation list, backend may include the user object
+  user?: { id: string; email: string; name?: string | null };
 }
 
 export interface ConversationSummary {

@@ -103,6 +103,17 @@ export function ConversationList({ onSelect }: ConversationListProps) {
         )}
         {list.map((c) => {
           const active = c.id === activeConversationId;
+          // Fallback title logic for direct conversations without explicit title
+          let displayTitle = c.title;
+          if (!displayTitle && c.type === "DIRECT" && user) {
+            console.log("Direct conversation without title:", c);
+            const other = c.participants.find((p) => p.userId !== user.id);
+            console.log("Other participant:", other);
+            // backend now loads participant.user; attempt to show name or email
+            if (other?.user) {
+              displayTitle = other.user.name || other.user.email;
+            }
+          }
           return (
             <Card
               key={c.id}
@@ -114,12 +125,13 @@ export function ConversationList({ onSelect }: ConversationListProps) {
               className={`mb-2 shadow-none ${
                 active ? "border-primary border-2" : ""
               }`}
+              fullWidth
             >
-              <CardBody className="py-2 flex items-center gap-3">
-                <Avatar size="sm" name={c.title || c.id.slice(0, 4)} />
+              <CardBody className="py-2 flex flex-row items-center gap-3">
+                <Avatar size="sm" name={displayTitle || c.id.slice(0, 4)} />
                 <div className="flex flex-col min-w-0">
                   <span className="text-sm font-medium truncate">
-                    {c.title || "Sans titre"}
+                    {displayTitle || "Sans titre"}
                   </span>
                   <span className="text-xs text-default-400">
                     {c.type === "DIRECT" ? "Direct" : "Groupe"}
