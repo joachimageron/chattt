@@ -134,6 +134,7 @@ export function useChatSocket() {
         isDeleted: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        sender: { id: user.id, email: user.email, name: user.name },
       };
       chat.upsertMessages(conversationId, [optimistic]);
       socketRef.current.emit("message.send", {

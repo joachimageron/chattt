@@ -39,6 +39,8 @@ export class ChatService {
   async sendMessage(input: SendMessageInput, sender: User): Promise<Message> {
     await this.ensureParticipant(input.conversationId, sender.id);
 
+    // Crée et rattache explicitement le sender pour que l'objet émis via WebSocket
+    // contienne déjà { sender: { id, email, name } } et évite l'affichage de l'id côté front.
     const message = this.messageRepo.create({
       conversationId: input.conversationId,
       senderId: sender.id,
@@ -46,7 +48,10 @@ export class ChatService {
       type: input.type ?? MessageType.TEXT,
       status: MessageStatus.SENT,
     });
-    return this.messageRepo.save(message);
+    // Attacher l'entité utilisateur (eager ne recharge pas toujours après un save direct)
+    message.sender = sender;
+    await this.messageRepo.save(message);
+    return message;
   }
 
   async getMessages(

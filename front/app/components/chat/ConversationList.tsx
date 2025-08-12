@@ -108,6 +108,7 @@ export function ConversationList({ onSelect }: ConversationListProps) {
           if (!displayTitle && c.type === "DIRECT" && user) {
             const other = c.participants.find((p) => p.userId !== user.id);
             if (other?.user) {
+              console.log("other user found", other.user);
               displayTitle = other.user.name || other.user.email;
             }
           }
