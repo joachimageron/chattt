@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useChatSocket } from "../components/chat/useChatSocket";
 import { useAuth } from "../components/providers/AuthProvider";
 import { ConversationList } from "../components/chat/ConversationList";
@@ -21,6 +21,7 @@ export default function ChatPage() {
   } = useChatSocket();
   const chat = useChat();
   const { activeConversationId, messages, setActiveConversation } = chat;
+  const messageInputRef = useRef<HTMLInputElement | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingInitialContent, setEditingInitialContent] =
     useState<string>("");
@@ -107,6 +108,10 @@ export default function ChatPage() {
       url.searchParams.set("c", id);
       router.replace(url.pathname + "?" + url.searchParams.toString());
     }
+    // Focus input after selection (timeout to ensure component mounted)
+    setTimeout(() => {
+      messageInputRef.current?.focus();
+    }, 0);
   };
 
   useEffect(() => {
@@ -155,6 +160,7 @@ export default function ChatPage() {
               <MessageInput
                 disabled={!activeConversationId}
                 onSend={(val) => sendMessage(activeConversationId!, val)}
+                inputRef={messageInputRef}
               />
             )}
           </>

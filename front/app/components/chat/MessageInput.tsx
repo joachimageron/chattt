@@ -5,9 +5,14 @@ import { Button, Input, Tooltip } from "@heroui/react";
 interface MessageInputProps {
   onSend: (value: string) => void;
   disabled?: boolean;
+  inputRef?: React.RefObject<HTMLInputElement>;
 }
 
-export function MessageInput({ onSend, disabled }: MessageInputProps) {
+export function MessageInput({
+  onSend,
+  disabled,
+  inputRef,
+}: MessageInputProps) {
   const [value, setValue] = useState("");
 
   const handleSend = useCallback(() => {
@@ -33,6 +38,10 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
           }
         }}
         isDisabled={disabled}
+        // external ref to allow parent to control focus when conversation changes
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ref={inputRef as React.RefObject<any>}
+        autoFocus
       />
       <Tooltip content="Envoyer">
         <Button
