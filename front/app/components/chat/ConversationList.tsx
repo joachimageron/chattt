@@ -13,8 +13,11 @@ import {
   ModalBody,
   ModalFooter,
   Input,
-  Checkbox,
   useDisclosure,
+  Autocomplete,
+  AutocompleteItem,
+  Listbox,
+  ListboxItem,
 } from "@heroui/react";
 import { useChat } from "./ChatContext";
 import type { ConversationSummary } from "./types";
@@ -35,7 +38,6 @@ export function ConversationList({ onSelect }: ConversationListProps) {
   const { user } = useAuth();
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
   const [title, setTitle] = useState("");
-  const [isGroup, setIsGroup] = useState(false);
   const [searchEmail, setSearchEmail] = useState("");
   const [userResults, setUserResults] = useState<
     { id: string; email: string; name?: string | null }[]
@@ -43,6 +45,7 @@ export function ConversationList({ onSelect }: ConversationListProps) {
   const [selectedUsers, setSelectedUsers] = useState<
     { id: string; email: string }[]
   >([]);
+  const searchDebounceRef = React.useRef<number | null>(null);
 
   const runSearch = async (term: string) => {
     try {
@@ -63,25 +66,30 @@ export function ConversationList({ onSelect }: ConversationListProps) {
     }
   };
 
-  const handleSelectUser = (u: { id: string; email: string }) => {
-    if (selectedUsers.find((s) => s.id === u.id)) return;
-    setSelectedUsers((prev) => [...prev, u]);
-    setSearchEmail("");
-    setUserResults([]);
+  const addSelectedUser = (userToAdd: { id: string; email: string }) => {
+    if (!userToAdd.id) return;
+    if (selectedUsers.find((u) => u.id === userToAdd.id)) return;
+    // On accepte plusieurs ajouts; si plus d'un participant => groupe
+    setSelectedUsers((prev) => [...prev, userToAdd]);
   };
-  const removeSelected = (id: string) => {
+
+  const removeSelectedUser = (id: string) => {
     setSelectedUsers((prev) => prev.filter((u) => u.id !== id));
   };
 
   const handleCreate = () => {
+    const isGroup = selectedUsers.length > 1;
     const ids = selectedUsers
       .map((u) => u.id)
       .filter((s) => s && s !== user?.id);
     if (!ids.length) return;
-    createConversation(ids, title || undefined, isGroup ? "GROUP" : "DIRECT");
+    createConversation(
+      ids,
+      isGroup ? title || undefined : undefined,
+      isGroup ? "GROUP" : "DIRECT"
+    );
     setSelectedUsers([]);
     setTitle("");
-    setIsGroup(false);
     onClose();
   };
 
@@ -108,7 +116,6 @@ export function ConversationList({ onSelect }: ConversationListProps) {
           if (!displayTitle && c.type === "DIRECT" && user) {
             const other = c.participants.find((p) => p.userId !== user.id);
             if (other?.user) {
-              console.log("other user found", other.user);
               displayTitle = other.user.name || other.user.email;
             }
           }
@@ -153,60 +160,79 @@ export function ConversationList({ onSelect }: ConversationListProps) {
                   placeholder="Nom du groupe"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  isDisabled={!isGroup}
+                  isDisabled={selectedUsers.length <= 1}
+                  description={
+                    selectedUsers.length <= 1
+                      ? "Ajoutez au moins 2 participants pour nommer le groupe"
+                      : undefined
+                  }
                 />
-                <Checkbox
-                  isSelected={isGroup}
-                  onValueChange={(v) => setIsGroup(v)}
-                >
-                  Groupe
-                </Checkbox>
-                <Input
-                  label="Rechercher un participant par email"
-                  placeholder="Tapez un email"
-                  value={searchEmail}
-                  onChange={async (e) => {
-                    const v = e.target.value;
-                    setSearchEmail(v);
-                    runSearch(v);
+                <Autocomplete
+                  label="Participants"
+                  placeholder={
+                    selectedUsers.length > 1
+                      ? "Rechercher un participant puis Entrée"
+                      : selectedUsers.length === 1
+                      ? "Ajouter un autre participant (optionnel)"
+                      : "Sélectionner un participant"
+                  }
+                  allowsCustomValue={false}
+                  items={userResults}
+                  inputValue={searchEmail}
+                  onInputChange={(value) => {
+                    setSearchEmail(value);
+                    if (searchDebounceRef.current) {
+                      window.clearTimeout(searchDebounceRef.current);
+                    }
+                    searchDebounceRef.current = window.setTimeout(() => {
+                      runSearch(value);
+                    }, 300);
                   }}
-                />
-                {userResults.length > 0 && (
-                  <div className="max-h-40 overflow-auto border rounded p-2 space-y-1">
-                    {userResults.map((u) => (
-                      <div
-                        key={u.id}
-                        className="flex justify-between items-center text-sm"
-                      >
-                        <span>{u.email}</span>
-                        <Button
-                          size="sm"
-                          variant="light"
-                          onPress={() => handleSelectUser(u)}
-                        >
-                          Ajouter
-                        </Button>
+                  onSelectionChange={(key) => {
+                    if (!key || key === "all") return;
+                    const found = userResults.find((u) => u.id === key);
+                    if (found) {
+                      addSelectedUser(found);
+                    }
+                    // reset champ
+                    setSearchEmail("");
+                    setUserResults([]);
+                  }}
+                  aria-label="Sélection de participants"
+                >
+                  {(u) => (
+                    <AutocompleteItem key={u.id} textValue={u.email}>
+                      <div className="flex flex-col">
+                        <span className="text-sm">{u.name || u.email}</span>
+                        {u.name && (
+                          <span className="text-xs text-default-400">
+                            {u.email}
+                          </span>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </AutocompleteItem>
+                  )}
+                </Autocomplete>
                 {selectedUsers.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
+                  <Listbox
+                    aria-label="Participants sélectionnés"
+                    selectionMode="none"
+                    variant="flat"
+                  >
                     {selectedUsers.map((u) => (
-                      <span
+                      <ListboxItem
                         key={u.id}
-                        className="px-2 py-1 bg-default-100 rounded text-xs flex items-center gap-1"
+                        textValue={u.email}
+                        endContent={
+                          <span className="text-danger text-sm">×</span>
+                        }
+                        className="cursor-pointer"
+                        onPress={() => removeSelectedUser(u.id)}
                       >
                         {u.email}
-                        <button
-                          onClick={() => removeSelected(u.id)}
-                          className="text-danger hover:underline"
-                        >
-                          x
-                        </button>
-                      </span>
+                      </ListboxItem>
                     ))}
-                  </div>
+                  </Listbox>
                 )}
               </ModalBody>
               <ModalFooter>
