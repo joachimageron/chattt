@@ -60,7 +60,7 @@ function loadConfig(): SeedConfig {
   };
 }
 
-function log(cfg: SeedConfig, ...args: any[]) {
+function log(cfg: SeedConfig, ...args: unknown[]) {
   if (cfg.verbose) console.log('[seed]', ...args);
 }
 
@@ -277,9 +277,56 @@ async function main() {
       await truncateDynamic(dataSource, cfg);
     }
     const users = await seedUsers(dataSource, cfg);
-    const directConvos = await seedDirectConversations(dataSource, cfg, users);
-    const groupConvos = await seedGroupConversations(dataSource, cfg, users);
-    await seedMessages(dataSource, cfg, [...directConvos, ...groupConvos]);
+    await seedDirectConversations(dataSource, cfg, users);
+    await seedGroupConversations(dataSource, cfg, users);
+    // Ensure every user is in at least one GROUP conversation
+    const participantRepo = dataSource.getRepository(ConversationParticipant);
+    const convoRepo = dataSource.getRepository(Conversation);
+    const existingGroups = await convoRepo.find({
+      where: { type: ConversationType.GROUP },
+    });
+    const existingGroupIds = new Set(existingGroups.map((c) => c.id));
+    const existingParticipants = await participantRepo.find();
+    const usersWithGroup = new Set(
+      existingParticipants
+        .filter((p) => existingGroupIds.has(p.conversationId))
+        .map((p) => p.userId),
+    );
+    const missingGroupUsers = users.filter((u) => !usersWithGroup.has(u.id));
+    if (missingGroupUsers.length) {
+      const allIds = users.map((u) => u.id);
+      const queue = missingGroupUsers.map((u) => u.id);
+      const newGroups: string[][] = [];
+      while (queue.length) {
+        if (queue.length >= 3) {
+          newGroups.push(queue.splice(0, Math.min(5, queue.length)));
+        } else {
+          const needed = 3 - queue.length;
+          const base = queue.splice(0, queue.length);
+          const fillers = faker.helpers.arrayElements(
+            allIds.filter((id) => !base.includes(id)),
+            needed,
+          );
+          newGroups.push([...base, ...fillers]);
+        }
+      }
+      for (const grp of newGroups) {
+        await createGroupConversation(
+          dataSource,
+          cfg,
+          Array.from(new Set(grp)),
+          'Auto group',
+        );
+      }
+      log(
+        cfg,
+        `Created ${newGroups.length} extra group(s) to cover ${missingGroupUsers.length} user(s) without a group`,
+      );
+    }
+
+    // Seed messages for all conversations including any newly created groups
+    const allConvos = await convoRepo.find();
+    await seedMessages(dataSource, cfg, allConvos);
     console.log('Seed completed ✔');
   } catch (err) {
     console.error('Seed failed', err);
