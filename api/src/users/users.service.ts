@@ -67,7 +67,11 @@ export class UsersService {
     email: string,
     password: string,
   ): Promise<User | null> {
-    const user = await this.findByEmail(email);
+    // Need password field explicitly
+    const user = await this.usersRepository.findOne({
+      where: { email },
+      select: ['id', 'email', 'password', 'name', 'createdAt', 'updatedAt'],
+    });
 
     if (user && (await this.comparePasswords(password, user.password))) {
       return user;
@@ -151,7 +155,10 @@ export class UsersService {
     userId: string,
     newPlainPassword: string,
   ): Promise<void> {
-    const user = await this.findOne(userId);
+    const user = await this.usersRepository.findOneOrFail({
+      where: { id: userId },
+      select: ['id', 'email', 'password', 'name', 'createdAt', 'updatedAt'],
+    });
     const salt = await bcrypt.genSalt();
     user.password = await bcrypt.hash(newPlainPassword, salt);
     await this.usersRepository.save(user);

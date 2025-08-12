@@ -23,5 +23,6 @@ export interface ConversationSummary {
   type: "DIRECT" | "GROUP";
   title?: string | null;
   participants: ConversationParticipant[];
-  messages?: ChatMessage[];
+  // lastMessage summary only (messages loaded separately)
+  lastMessage?: ChatMessage;
 }

@@ -21,6 +21,7 @@ export class User {
 
   @Column()
   @MinLength(6)
+  @Column({ select: false })
   password: string;
 
   @Field({ nullable: true })

@@ -13,6 +13,7 @@ import { User } from '../users/entities/user.entity';
 import { ChatService } from './chat.service';
 import { SendMessageInput } from './dto/send-message.input';
 import { CreateConversationInput } from './dto/create-conversation.input';
+import { sanitizeConversation, sanitizeMessage } from './sanitize';
 
 // augment Socket type locally
 interface AuthedSocket extends Socket {
@@ -99,8 +100,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!user) return;
     try {
       const message = await this.chatService.sendMessage(body, user);
-      this.server.to(message.conversationId).emit('message.new', message);
-      client.emit('message.sent', { tempId: body.tempId, message });
+      const sanitized = sanitizeMessage(message);
+      this.server.to(message.conversationId).emit('message.new', sanitized);
+      client.emit('message.sent', { tempId: body.tempId, message: sanitized });
     } catch (e) {
       client.emit('message.error', { error: (e as Error).message });
     }
@@ -123,7 +125,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
       client.emit('message.list', {
         conversationId: body.conversationId,
-        messages,
+        messages: messages.map(sanitizeMessage),
         hasMore: messages.length === (body.limit ?? 30),
       });
     } catch (e) {
@@ -191,7 +193,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
       this.server
         .to(body.conversationId)
-        .emit('message.updated', { message: updated });
+        .emit('message.updated', { message: sanitizeMessage(updated) });
     } catch (e) {
       client.emit('message.error', { error: (e as Error).message });
     }
@@ -226,7 +228,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const conversations = await this.chatService.listConversationsForUser(
         user.id,
       );
-      client.emit('conversation.list', { conversations });
+      client.emit('conversation.list', {
+        conversations: conversations.map(sanitizeConversation),
+      });
     } catch (e) {
       client.emit('error', { message: (e as Error).message });
     }
@@ -245,13 +249,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       await client.join(convo.id);
       client.data.joinedRooms?.add(convo.id);
       // emit to creator
-      client.emit('conversation.created', { conversation: convo });
+      client.emit('conversation.created', {
+        conversation: sanitizeConversation(convo),
+      });
       // inform other participants if they are connected
       convo.participants
         .filter((p) => p.userId !== user.id)
         .forEach(() => {
           this.server.to(convo.id).emit('conversation.updated', {
-            conversation: convo,
+            conversation: sanitizeConversation(convo),
           });
         });
     } catch (e) {

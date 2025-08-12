@@ -26,6 +26,6 @@ export interface ChatMessage {
   editedAt?: string;
   isDeleted: boolean;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
   sender?: { id: string; email: string; name?: string | null };
 }
