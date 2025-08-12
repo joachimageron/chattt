@@ -6,14 +6,7 @@ import React, {
   useState,
   useCallback,
 } from "react";
-import {
-  ScrollShadow,
-  Spinner,
-  Avatar,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@heroui/react";
+import { ScrollShadow, Spinner, Avatar } from "@heroui/react";
 import { ChatMessage } from "./socketClient";
 import { MessageItem } from "./MessageItem";
 import { useAuth } from "../providers/AuthProvider";
@@ -131,21 +124,29 @@ export function MessageList({
         </div>
       )}
       <div style={{ height: padTop }} />
-      {visible.map((m) => {
+      {visible.map((m, idx) => {
         const isLastOwn = m.id === lastOwnMessageId;
         const readers = readersFor(m);
         const showReaders =
           isGroupConversation && readers.length > 0 && isLastOwn;
-        const tooltipContent = () => {
-          const parts: string[] = [];
-          if (m.deliveredAt)
-            parts.push(
-              `Livré: ${new Date(m.deliveredAt).toLocaleTimeString()}`
-            );
-          if (m.readAt)
-            parts.push(`Lu: ${new Date(m.readAt).toLocaleTimeString()}`);
-          return parts.join("\n") || "Envoyé";
-        };
+        // Grouping logic: group messages from same sender within 3 minutes
+        const prev = idx > 0 ? visible[idx - 1] : undefined;
+        const next = idx < visible.length - 1 ? visible[idx + 1] : undefined;
+        const GROUP_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes
+        const sameAsPrev =
+          prev &&
+          prev.senderId === m.senderId &&
+          Math.abs(
+            new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime()
+          ) <= GROUP_INTERVAL_MS;
+        const sameAsNext =
+          next &&
+          next.senderId === m.senderId &&
+          Math.abs(
+            new Date(next.createdAt).getTime() - new Date(m.createdAt).getTime()
+          ) <= GROUP_INTERVAL_MS;
+        const showAvatar = !sameAsPrev; // only first in group
+        const showTimestamp = !sameAsNext; // only last in group
         const item = (
           <MessageItem
             key={m.id}
@@ -153,20 +154,14 @@ export function MessageList({
             onEdit={onEdit}
             onDelete={onDelete}
             showStatus={isLastOwn}
+            showAvatar={showAvatar}
+            showTimestamp={showTimestamp}
+            compactAbove={sameAsPrev}
           />
         );
         return (
           <div key={m.id} className="relative">
-            <Popover placement="top" showArrow>
-              <PopoverTrigger>
-                <div>{item}</div>
-              </PopoverTrigger>
-              <PopoverContent className="px-2 py-1">
-                <div className="text-[10px] whitespace-pre-line">
-                  {tooltipContent()}
-                </div>
-              </PopoverContent>
-            </Popover>
+            {item}
             {showReaders && (
               <div className="flex gap-0.5 justify-end pr-8 mt-0.5">
                 {readers.slice(0, 5).map((r) => (
