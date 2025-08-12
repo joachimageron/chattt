@@ -32,6 +32,13 @@ export function useChatSocket() {
       // Avoid duplicate: if it's our own message, we'll handle via message.sent
       if (msg.senderId === user?.id) return;
       chat.upsertMessages(msg.conversationId, [msg]);
+      // Accusé de réception (delivered) immédiat si on est dans la conversation
+      if (chat.activeConversationId === msg.conversationId) {
+        socket.emit("message.delivered", {
+          conversationId: msg.conversationId,
+          messageIds: [msg.id],
+        });
+      }
     };
     const onMessageSent = ({
       tempId,
@@ -81,6 +88,32 @@ export function useChatSocket() {
         payload.messages.length
       );
       chat.upsertMessages(payload.conversationId, payload.messages);
+      // Marquer comme deliverés tous les messages reçus (non envoyés par nous) encore en status SENT
+      const toDeliver = payload.messages
+        .filter(
+          (m) => m.senderId !== user?.id && m.status === MessageStatus.SENT
+        )
+        .map((m) => m.id);
+      if (toDeliver.length) {
+        socket.emit("message.delivered", {
+          conversationId: payload.conversationId,
+          messageIds: toDeliver,
+        });
+      }
+      // Marquer comme lus si c'est la conversation active
+      if (chat.activeConversationId === payload.conversationId) {
+        const toRead = payload.messages
+          .filter(
+            (m) => m.senderId !== user?.id && m.status !== MessageStatus.READ
+          )
+          .map((m) => m.id);
+        if (toRead.length) {
+          socket.emit("message.read", {
+            conversationId: payload.conversationId,
+            messageIds: toRead,
+          });
+        }
+      }
     };
 
     const onMessageError = (payload: { error: string }) => {
@@ -101,6 +134,41 @@ export function useChatSocket() {
     socket.on("conversation.created", onConversationCreated);
     socket.on("conversation.updated", onConversationUpdated);
     socket.on("message.list", onMessageList);
+    socket.on(
+      "message.delivered",
+      (p: { messageIds: string[]; deliveredAt?: string }) => {
+        if (!chat.activeConversationId) return;
+        const list = chat.messages[chat.activeConversationId] || [];
+        p.messageIds.forEach((id) => {
+          const existing = list.find((m) => m.id === id);
+          if (existing && existing.status === MessageStatus.SENT) {
+            chat.updateMessage({
+              ...existing,
+              status: MessageStatus.DELIVERED,
+              deliveredAt: p.deliveredAt,
+            });
+          }
+        });
+      }
+    );
+    socket.on(
+      "message.read",
+      (p: { messageIds: string[]; userId: string; readAt?: string }) => {
+        if (!chat.activeConversationId) return;
+        // Pour simplifier: on met à jour les messages dont nous sommes l'auteur
+        const msgs = (chat.messages[chat.activeConversationId] || []).filter(
+          (m) => p.messageIds.includes(m.id)
+        );
+        if (!msgs.length) return;
+        msgs.forEach((m) =>
+          chat.updateMessage({
+            ...m,
+            status: MessageStatus.READ,
+            readAt: p.readAt,
+          })
+        );
+      }
+    );
     socket.on("message.error", onMessageError);
 
     return () => {
@@ -115,6 +183,8 @@ export function useChatSocket() {
       socket.off("conversation.updated", onConversationUpdated);
       socket.off("message.list", onMessageList);
       socket.off("message.error", onMessageError);
+      socket.off("message.delivered");
+      socket.off("message.read");
     };
   }, [user, chat]);
 
@@ -215,8 +285,27 @@ export function useChatSocket() {
     if (chat.activeConversationId) {
       joinConversation(chat.activeConversationId);
       loadMessages(chat.activeConversationId);
+      // Quand on ouvre une conversation, marquer les messages non lus comme read
+      const list = chat.messages[chat.activeConversationId] || [];
+      const toRead = list
+        .filter(
+          (m) => m.senderId !== user?.id && m.status !== MessageStatus.READ
+        )
+        .map((m) => m.id);
+      if (toRead.length && socketRef.current) {
+        socketRef.current.emit("message.read", {
+          conversationId: chat.activeConversationId,
+          messageIds: toRead,
+        });
+      }
     }
-  }, [chat.activeConversationId, joinConversation, loadMessages]);
+  }, [
+    chat.activeConversationId,
+    joinConversation,
+    loadMessages,
+    chat.messages,
+    user?.id,
+  ]);
 
   return {
     sendMessage,

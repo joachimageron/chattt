@@ -83,10 +83,11 @@ export class ChatService {
     // Ensure user is participant (authorization)
     await this.ensureParticipant(conversationId, userId);
     if (!messageIds.length) return;
+    const now = new Date();
     await this.messageRepo
       .createQueryBuilder()
       .update()
-      .set({ status: MessageStatus.DELIVERED })
+      .set({ status: MessageStatus.DELIVERED, deliveredAt: now })
       .where('conversationId = :conversationId', { conversationId })
       .andWhere('id IN (:...ids)', { ids: messageIds })
       .andWhere('status = :sent', { sent: MessageStatus.SENT })
@@ -100,10 +101,11 @@ export class ChatService {
   ) {
     await this.ensureParticipant(conversationId, userId);
     if (!messageIds.length) return;
+    const now = new Date();
     await this.messageRepo
       .createQueryBuilder()
       .update()
-      .set({ status: MessageStatus.READ })
+      .set({ status: MessageStatus.READ, readAt: now })
       .where('conversationId = :conversationId', { conversationId })
       .andWhere('id IN (:...ids)', { ids: messageIds })
       .andWhere('status != :read', { read: MessageStatus.READ })

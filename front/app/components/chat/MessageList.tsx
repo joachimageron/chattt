@@ -1,8 +1,9 @@
 "use client";
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useMemo } from "react";
 import { ScrollShadow, Spinner } from "@heroui/react";
 import { ChatMessage } from "./socketClient";
 import { MessageItem } from "./MessageItem";
+import { useAuth } from "../providers/AuthProvider";
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -18,6 +19,17 @@ export function MessageList({
   loading,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const { user } = useAuth();
+
+  // ID du dernier message envoyé par l'utilisateur courant (non supprimé)
+  const lastOwnMessageId = useMemo(() => {
+    if (!user) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.senderId === user.id) return m.id;
+    }
+    return null;
+  }, [messages, user]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,6 +48,7 @@ export function MessageList({
           message={m}
           onEdit={onEdit}
           onDelete={onDelete}
+          showStatus={m.id === lastOwnMessageId}
         />
       ))}
       <div ref={bottomRef} />

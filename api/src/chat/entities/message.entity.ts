@@ -65,6 +65,16 @@ export class Message {
   @Column({ type: 'enum', enum: MessageStatus, default: MessageStatus.SENT })
   status: MessageStatus;
 
+  // Horodatage quand le message est marqué comme livré (tous les destinataires l'ont reçu ou au premier accusé selon la logique métier actuelle)
+  @Field({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
+  deliveredAt?: Date;
+
+  // Horodatage quand le message est marqué comme lu
+  @Field({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
+  readAt?: Date;
+
   @Field({ nullable: true })
   @Column({ nullable: true })
   editedAt?: Date;

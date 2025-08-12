@@ -23,6 +23,8 @@ export interface ChatMessage {
   content: string;
   type: MessageType;
   status: MessageStatus;
+  deliveredAt?: string;
+  readAt?: string;
   editedAt?: string;
   isDeleted: boolean;
   createdAt: string;

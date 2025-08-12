@@ -14,9 +14,15 @@ interface MessageItemProps {
   message: ChatMessage;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  showStatus?: boolean; // afficher les ticks uniquement sur le dernier message de l'utilisateur
 }
 
-export function MessageItem({ message, onEdit, onDelete }: MessageItemProps) {
+export function MessageItem({
+  message,
+  onEdit,
+  onDelete,
+  showStatus,
+}: MessageItemProps) {
   const { user } = useAuth();
   const isMine = user?.id === message.senderId;
 
@@ -52,7 +58,7 @@ export function MessageItem({ message, onEdit, onDelete }: MessageItemProps) {
         <Dropdown placement="left-start">
           <DropdownTrigger>
             <div
-              className={`max-w-xs rounded-medium px-3 py-2 text-sm cursor-pointer transition-colors bg-content2 hover:bg-content3 shadow-sm border border-transparent group-hover:border-default-200 ${
+              className={`relative max-w-xs rounded-medium px-3 py-2 text-sm cursor-pointer transition-colors bg-content2 hover:bg-content3 shadow-sm border border-transparent group-hover:border-default-200 ${
                 isMine ? "bg-primary-500/10" : ""
               }`}
             >
@@ -60,6 +66,15 @@ export function MessageItem({ message, onEdit, onDelete }: MessageItemProps) {
               {!message.isDeleted && message.editedAt && (
                 <span className="ml-2 text-[10px] text-default-400">
                   (édité)
+                </span>
+              )}
+              {showStatus && (
+                <span className="block mt-1 text-[10px] text-default-400 text-right select-none">
+                  {message.status === "SENT" && "✓"}
+                  {message.status === "DELIVERED" && "✓✓"}
+                  {message.status === "READ" && (
+                    <span className="text-primary-500">✓✓</span>
+                  )}
                 </span>
               )}
             </div>
@@ -92,7 +107,7 @@ export function MessageItem({ message, onEdit, onDelete }: MessageItemProps) {
       ) : (
         <div
           className={`max-w-xs rounded-medium px-3 py-2 text-sm bg-content2 shadow-sm border border-transparent ${
-            message.isDeleted ? "bg-transparent" : "" // placeholder for potential future styling
+            message.isDeleted ? "bg-transparent" : ""
           }`}
         >
           {content}

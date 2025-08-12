@@ -148,9 +148,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         body.messageIds,
         user.id,
       );
-      this.server
-        .to(body.conversationId)
-        .emit('message.delivered', { messageIds: body.messageIds });
+      this.server.to(body.conversationId).emit('message.delivered', {
+        messageIds: body.messageIds,
+        conversationId: body.conversationId,
+        deliveredAt: new Date().toISOString(),
+      });
     } catch (e) {
       client.emit('message.error', { error: (e as Error).message });
     }
@@ -170,9 +172,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         body.messageIds,
         user.id,
       );
-      this.server
-        .to(body.conversationId)
-        .emit('message.read', { messageIds: body.messageIds, userId: user.id });
+      this.server.to(body.conversationId).emit('message.read', {
+        messageIds: body.messageIds,
+        userId: user.id,
+        conversationId: body.conversationId,
+        readAt: new Date().toISOString(),
+      });
     } catch (e) {
       client.emit('message.error', { error: (e as Error).message });
     }

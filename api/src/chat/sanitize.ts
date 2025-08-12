@@ -17,6 +17,8 @@ export function sanitizeMessage(message: Message) {
     content: message.content,
     type: message.type,
     status: message.status,
+    deliveredAt: message.deliveredAt,
+    readAt: message.readAt,
     editedAt: message.editedAt,
     isDeleted: message.isDeleted,
     createdAt: message.createdAt,
