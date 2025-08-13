@@ -19,6 +19,7 @@ export default function ChatPage() {
     editMessage,
     deleteMessage,
     updateConversationTitle,
+    emitTyping,
   } = useChatSocket();
   const chat = useChat();
   const { activeConversationId, messages, setActiveConversation } = chat;
@@ -244,6 +245,39 @@ export default function ChatPage() {
               onEdit={startEdit}
               onDelete={handleDelete}
             />
+            {/* Typing indicator */}
+            {(() => {
+              if (!activeConversationId) return null;
+              const typingMap = chat.typing[activeConversationId] || {};
+              const now = Date.now();
+              // Expire entries older than 5s (display only active)
+              const activeTypers = Object.entries(typingMap)
+                .filter(([uid, ts]) => now - ts < 5000 && uid !== user.id)
+                .map(([uid]) => uid);
+              if (!activeTypers.length) return null;
+              const names = activeTypers
+                .map(
+                  (uid) =>
+                    currentConversation?.participants.find(
+                      (p) => p.userId === uid
+                    )?.user?.name ||
+                    currentConversation?.participants.find(
+                      (p) => p.userId === uid
+                    )?.user?.email ||
+                    "Quelqu'un"
+                )
+                .slice(0, 2);
+              const more = activeTypers.length - names.length;
+              return (
+                <div className="px-4 py-1 text-xs text-default-500 animate-pulse">
+                  {names.join(", ")}
+                  {more > 0
+                    ? ` et ${more} autre${more > 1 ? "s" : ""}`
+                    : ""}{" "}
+                  écrit{activeTypers.length > 1 ? "vent" : ""}...
+                </div>
+              );
+            })()}
             {editingMessageId ? (
               <div className="border-t border-divider bg-warning-50/30 p-2 flex flex-col gap-2">
                 <div className="text-xs text-default-500">
@@ -261,6 +295,9 @@ export default function ChatPage() {
                 disabled={!activeConversationId}
                 onSend={(val) => sendMessage(activeConversationId!, val)}
                 inputRef={messageInputRef}
+                onTypingChange={(t) =>
+                  activeConversationId && emitTyping(activeConversationId, t)
+                }
               />
             )}
           </>

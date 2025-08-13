@@ -47,7 +47,7 @@ interface SeedConfig {
 
 function loadConfig(): SeedConfig {
   return {
-    users: parseInt(process.env.SEED_USERS || '25', 10),
+    users: parseInt(process.env.SEED_USERS || '10', 10),
     directPairs: parseInt(process.env.SEED_DIRECT_PAIRS || '100', 10),
     messagesMin: parseInt(process.env.SEED_MESSAGES_MIN || '5', 10),
     messagesMax: parseInt(process.env.SEED_MESSAGES_MAX || '25', 10),

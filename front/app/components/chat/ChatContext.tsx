@@ -30,6 +30,12 @@ interface ChatContextValue {
   updateMessage: (msg: ChatMessage) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   confirmMessage: (tempId: string, real: ChatMessage) => void;
+  typing: Record<string, Record<string, number>>; // conversationId -> userId -> last activity epoch ms
+  setTyping: (
+    conversationId: string,
+    userId: string,
+    isTyping: boolean
+  ) => void;
 }
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
@@ -42,6 +48,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
+  // Typing state map
+  const [typingState, setTypingState] = useState<
+    Record<string, Record<string, number>>
+  >({});
 
   const setConversations = useCallback((convs: ConversationSummary[]) => {
     setConversationsState(
@@ -152,6 +162,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       deleteMessage,
       confirmMessage,
       updateParticipantRead,
+      typing: typingState,
+      setTyping: (
+        conversationId: string,
+        userId: string,
+        isTyping: boolean
+      ) => {
+        setTypingState((prev) => {
+          const existing = prev[conversationId];
+          const conv = existing ? { ...existing } : {};
+          if (isTyping) {
+            conv[userId] = Date.now();
+          } else {
+            delete conv[userId];
+          }
+          return { ...prev, [conversationId]: conv };
+        });
+      },
     }),
     [
       conversations,
@@ -164,6 +191,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       deleteMessage,
       confirmMessage,
       updateParticipantRead,
+      typingState,
     ]
   );
 

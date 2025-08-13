@@ -10,6 +10,9 @@ export function useChatSocket() {
   const { user } = useAuth();
   const chat = useChat();
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
+  // Références internes pour éviter de réémettre join/load inutilement
+  const lastConvRef = useRef<string | null>(null);
+  const joinedRoomsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!user) return;
@@ -176,6 +179,21 @@ export function useChatSocket() {
         chat.updateParticipantRead(p.conversationId, p.userId, p.lastReadAt);
       }
     );
+    // Typing indicators
+    socket.on(
+      "typing.started",
+      (p: { conversationId: string; userId: string; at?: string }) => {
+        if (p.userId === user?.id) return; // ignore self
+        chat.setTyping(p.conversationId, p.userId, true);
+      }
+    );
+    socket.on(
+      "typing.stopped",
+      (p: { conversationId: string; userId: string; at?: string }) => {
+        if (p.userId === user?.id) return;
+        chat.setTyping(p.conversationId, p.userId, false);
+      }
+    );
 
     return () => {
       socket.off("connect", onConnect);
@@ -192,6 +210,8 @@ export function useChatSocket() {
       socket.off("participant.read");
       socket.off("message.delivered");
       socket.off("message.read");
+      socket.off("typing.started");
+      socket.off("typing.stopped");
     };
   }, [user, chat]);
 
@@ -289,30 +309,40 @@ export function useChatSocket() {
   );
 
   useEffect(() => {
-    if (chat.activeConversationId) {
-      joinConversation(chat.activeConversationId);
-      loadMessages(chat.activeConversationId);
-      // Quand on ouvre une conversation, marquer les messages non lus comme read
-      const list = chat.messages[chat.activeConversationId] || [];
-      const toRead = list
-        .filter(
-          (m) => m.senderId !== user?.id && m.status !== MessageStatus.READ
-        )
-        .map((m) => m.id);
-      if (toRead.length && socketRef.current) {
-        socketRef.current.emit("message.read", {
-          conversationId: chat.activeConversationId,
-          messageIds: toRead,
-        });
-      }
+    // Garde pour éviter réémissions multiples sur la même conversation
+    const cid = chat.activeConversationId;
+    if (!cid) return;
+
+    // Si déjà traité cette conversation (et déjà join), ne rien refaire
+    if (lastConvRef.current === cid) return;
+
+    // Join la room une seule fois
+    if (!joinedRoomsRef.current.has(cid)) {
+      joinConversation(cid);
+      joinedRoomsRef.current.add(cid);
     }
-  }, [
-    chat.activeConversationId,
-    joinConversation,
-    loadMessages,
-    chat.messages,
-    user?.id,
-  ]);
+
+    // Charger uniquement si aucun message local encore (pagination manuelle utilisera loadMessages séparément)
+    if (!chat.messages[cid] || chat.messages[cid].length === 0) {
+      loadMessages(cid);
+    }
+
+    // Marquer comme lus les messages non lus déjà présents localement
+    const list = chat.messages[cid] || [];
+    const toRead = list
+      .filter((m) => m.senderId !== user?.id && m.status !== MessageStatus.READ)
+      .map((m) => m.id);
+    if (toRead.length && socketRef.current) {
+      socketRef.current.emit("message.read", {
+        conversationId: cid,
+        messageIds: toRead,
+      });
+    }
+
+    lastConvRef.current = cid;
+    // NOTE: ne pas ajouter chat.messages aux deps sinon chaque message/delivery relance join/load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.activeConversationId, joinConversation, loadMessages, user?.id]);
 
   return {
     sendMessage,
@@ -322,5 +352,11 @@ export function useChatSocket() {
     editMessage,
     deleteMessage,
     updateConversationTitle,
+    emitTyping: (conversationId: string, isTyping: boolean) => {
+      if (!socketRef.current) return;
+      socketRef.current.emit(isTyping ? "typing.start" : "typing.stop", {
+        conversationId,
+      });
+    },
   };
 }

@@ -301,4 +301,45 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.emit('error', { message: (e as Error).message });
     }
   }
+
+  @SubscribeMessage('typing.start')
+  async handleTypingStart(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() body: { conversationId: string },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    if (!body?.conversationId) return;
+    try {
+      await this.chatService.ensureParticipant(body.conversationId, user.id);
+      // Broadcast aux autres participants uniquement (room broadcast sans l'émetteur)
+      client.to(body.conversationId).emit('typing.started', {
+        conversationId: body.conversationId,
+        userId: user.id,
+        at: new Date().toISOString(),
+      });
+    } catch (e) {
+      client.emit('error', { message: (e as Error).message });
+    }
+  }
+
+  @SubscribeMessage('typing.stop')
+  async handleTypingStop(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() body: { conversationId: string },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    if (!body?.conversationId) return;
+    try {
+      await this.chatService.ensureParticipant(body.conversationId, user.id);
+      client.to(body.conversationId).emit('typing.stopped', {
+        conversationId: body.conversationId,
+        userId: user.id,
+        at: new Date().toISOString(),
+      });
+    } catch (e) {
+      client.emit('error', { message: (e as Error).message });
+    }
+  }
 }
