@@ -22,7 +22,7 @@ export function MessageInput({
   React.useEffect(() => {
     if (!isTyping) return;
     const id = setInterval(() => {
-      if (Date.now() - lastTypedRef.current > 25000) {
+      if (Date.now() - lastTypedRef.current > 2500) {
         setIsTyping(false);
         onTypingChange?.(false);
       }
