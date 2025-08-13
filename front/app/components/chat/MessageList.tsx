@@ -85,25 +85,44 @@ export function MessageList({
     [chat.activeConversationId, chat.conversations]
   );
 
-  const readersFor = useCallback(
-    (msg: ChatMessage) => {
-      if (!participants.length)
-        return [] as { userId: string; initials: string; name: string }[];
-      return participants
-        .filter(
-          (p) =>
-            p.userId !== msg.senderId &&
-            p.lastReadAt &&
-            new Date(p.lastReadAt) >= new Date(msg.createdAt)
-        )
-        .map((p) => ({
-          userId: p.userId,
-          initials: p.user?.name?.[0] || p.user?.email?.[0] || "U",
-          name: p.user?.name || p.user?.email || p.userId,
-        }));
-    },
-    [participants]
-  );
+  // Map messageId -> list of participants (excluding current user) for whom THIS message
+  // is the latest outgoing message (from the current user) they have seen.
+  const readersMap = useMemo(() => {
+    if (!user?.id || !participants.length || !messages.length)
+      return {} as Record<
+        string,
+        { userId: string; initials: string; name: string }[]
+      >;
+    const map: Record<
+      string,
+      { userId: string; initials: string; name: string }[]
+    > = {};
+    // Traverse participants and find for each their last seen message authored by current user.
+    const ordered = [...messages]; // messages already sorted asc
+    for (const p of participants) {
+      if (p.userId === user.id) continue; // skip self
+      if (!p.lastReadAt) continue;
+      const lastReadTime = new Date(p.lastReadAt).getTime();
+      // Walk from end until we find one of MY messages created before or at lastReadAt
+      for (let i = ordered.length - 1; i >= 0; i--) {
+        const msg = ordered[i];
+        if (msg.senderId !== user.id) continue; // only outgoing
+        const msgTime = new Date(msg.createdAt).getTime();
+        if (msgTime <= lastReadTime) {
+          const entry = {
+            userId: p.userId,
+            initials: p.user?.name?.[0] || p.user?.email?.[0] || "U",
+            name: p.user?.name || p.user?.email || p.userId,
+          };
+          // Avoid duplicates in case multiple participants map to same message
+          if (!map[msg.id]) map[msg.id] = [entry];
+          else map[msg.id].push(entry);
+          break;
+        }
+      }
+    }
+    return map;
+  }, [messages, participants, user?.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -125,7 +144,7 @@ export function MessageList({
       )}
       <div style={{ height: padTop }} />
       {visible.map((m, idx) => {
-        const readers = readersFor(m);
+        const readers = readersMap[m.id] || [];
         // Grouping logic: group messages from same sender within 3 minutes
         const prev = idx > 0 ? visible[idx - 1] : undefined;
         const next = idx < visible.length - 1 ? visible[idx + 1] : undefined;
