@@ -155,7 +155,7 @@ export function MessageList({
             message={m}
             onEdit={onEdit}
             onDelete={onDelete}
-            showStatus={isLastOwn}
+            showStatus={!isGroupConversation && isLastOwn}
             showAvatar={showAvatar}
             showTimestamp={showTimestamp}
             compactAbove={sameAsPrev}
@@ -165,14 +165,14 @@ export function MessageList({
           <div key={m.id} className="relative">
             {item}
             {showReaders && (
-              <div className="flex flex-row flex-wrap gap-0.5 justify-end pr-8 mt-0.5 max-w-[60%] ml-auto">
+              <div className="flex flex-row flex-wrap gap-0.5 justify-end mt-0.5 max-w-[60%] ml-auto">
                 {readers.slice(0, 6).map((r) => (
                   <Avatar
                     key={r.userId}
                     size="sm"
                     title={r.name}
                     name={r.initials}
-                    className="w-5 h-5 min-w-5 min-h-5 text-[8px] ring-1 ring-default-200 shrink-0"
+                    className="w-4 h-4 text-[8px] ring-1 ring-default-200 shrink-0 ml-[2px]"
                   />
                 ))}
                 {readers.length > 6 && (
