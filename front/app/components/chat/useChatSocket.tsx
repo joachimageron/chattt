@@ -35,12 +35,22 @@ export function useChatSocket() {
       // Avoid duplicate: if it's our own message, we'll handle via message.sent
       if (msg.senderId === user?.id) return;
       chat.upsertMessages(msg.conversationId, [msg]);
-      // Accusé de réception (delivered) immédiat si on est dans la conversation
+      // Si on est dans la conversation active et la fenêtre est visible, on marque directement comme livré + lu
       if (chat.activeConversationId === msg.conversationId) {
+        const visibilityOk =
+          typeof document !== "undefined"
+            ? document.visibilityState === "visible"
+            : true;
         socket.emit("message.delivered", {
           conversationId: msg.conversationId,
           messageIds: [msg.id],
         });
+        if (visibilityOk) {
+          socket.emit("message.read", {
+            conversationId: msg.conversationId,
+            messageIds: [msg.id],
+          });
+        }
       }
     };
     const onMessageSent = ({

@@ -6,7 +6,7 @@ import React, {
   useState,
   useCallback,
 } from "react";
-import { ScrollShadow, Spinner, Avatar } from "@heroui/react";
+import { ScrollShadow, Spinner, Avatar, Tooltip } from "@heroui/react";
 import { ChatMessage } from "./socketClient";
 import { MessageItem } from "./MessageItem";
 import { useAuth } from "../providers/AuthProvider";
@@ -125,10 +125,7 @@ export function MessageList({
       )}
       <div style={{ height: padTop }} />
       {visible.map((m, idx) => {
-        const isLastOwn = m.id === lastOwnMessageId;
         const readers = readersFor(m);
-        const showReaders =
-          isGroupConversation && readers.length > 0 && isLastOwn;
         // Grouping logic: group messages from same sender within 3 minutes
         const prev = idx > 0 ? visible[idx - 1] : undefined;
         const next = idx < visible.length - 1 ? visible[idx + 1] : undefined;
@@ -147,6 +144,11 @@ export function MessageList({
           ) <= GROUP_INTERVAL_MS;
         const showAvatar = !sameAsPrev; // only first in group
         const showTimestamp = !sameAsNext; // only last in group
+        const isMine = user?.id === m.senderId;
+        // Show readers under each last message block authored by current user (not just the final message of conversation)
+        const showReaders =
+          isGroupConversation && readers.length > 0 && isMine && !sameAsNext;
+        const isLastOwn = m.id === lastOwnMessageId; // still used for status ticks
         const item = (
           <MessageItem
             key={m.id}
@@ -163,20 +165,27 @@ export function MessageList({
           <div key={m.id} className="relative">
             {item}
             {showReaders && (
-              <div className="flex gap-0.5 justify-end pr-8 mt-0.5">
-                {readers.slice(0, 5).map((r) => (
+              <div className="flex flex-row flex-wrap gap-0.5 justify-end pr-8 mt-0.5 max-w-[60%] ml-auto">
+                {readers.slice(0, 6).map((r) => (
                   <Avatar
                     key={r.userId}
                     size="sm"
                     title={r.name}
                     name={r.initials}
-                    className="w-5 h-5 min-w-5 min-h-5 text-[8px] ring-1 ring-default-200"
+                    className="w-5 h-5 min-w-5 min-h-5 text-[8px] ring-1 ring-default-200 shrink-0"
                   />
                 ))}
-                {readers.length > 5 && (
-                  <span className="text-[8px] text-default-400 align-middle">
-                    +{readers.length - 5}
-                  </span>
+                {readers.length > 6 && (
+                  <Tooltip
+                    content={readers
+                      .slice(6)
+                      .map((r) => r.name)
+                      .join(", ")}
+                  >
+                    <span className="text-[9px] px-1 rounded-full bg-content2 text-default-500 cursor-default select-none">
+                      +{readers.length - 6}
+                    </span>
+                  </Tooltip>
                 )}
               </div>
             )}
