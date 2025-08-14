@@ -134,13 +134,21 @@ export function MessageList({
     return map;
   }, [messages, participants, user?.id]);
 
-  // Auto scroll: cas 2 => append récent si utilisateur proche du bas (initial géré séparément)
+  // Auto scroll: sur nouveau message si utilisateur proche du bas (limite les micro adjustments)
   const lastId = messages.length ? messages[messages.length - 1].id : undefined;
   useEffect(() => {
     if (!containerRef.current || !lastId) return;
     const el = containerRef.current;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight; // px manquants pour être tout en bas
+    const NEAR = 140; // seuil "près du bas"
+    const MIN = 4; // ignorer delta quasi nul
+    if (distance <= MIN) return; // déjà collé
+    if (distance < NEAR) {
+      // scroll direct sans animation pour éviter corrections successives
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
   }, [lastId]);
 
   // Scroll bas initial: une seule fois par conversation quand premiers messages arrivent
@@ -149,13 +157,16 @@ export function MessageList({
     if (!containerRef.current) return;
     if (!messages.length) return;
     if (initialScrolledRef.current.has(conversationId)) return;
-    // Forcer position tout en bas (scrollTop = scrollHeight) pour éviter ancrage
     const el = containerRef.current;
-    // Utiliser double raf pour laisser le layout se stabiliser
     requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
+      const before = el.scrollHeight;
+      el.scrollTop = before;
+      // Seconde passe uniquement si la hauteur a changé significativement
       requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight; // second réglage au cas où padding/hauteurs tardives
+        const after = el.scrollHeight;
+        if (after - before > 20) {
+          el.scrollTop = after;
+        }
       });
     });
     initialScrolledRef.current.add(conversationId);
@@ -201,7 +212,7 @@ export function MessageList({
         containerRef.current = el as HTMLDivElement | null;
       }}
       onScroll={onScroll}
-      className="flex-1 p-4 space-y-2 overflow-y-auto relative overflow-x-hidden"
+      className="chat-scroll flex-1 p-4 space-y-2 overflow-y-auto relative overflow-x-hidden"
     >
       {loading && (
         <div className="flex justify-center py-4">

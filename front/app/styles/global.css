@@ -4,3 +4,8 @@
 @tailwind utilities;
 
 /* Vos styles personnalisés ici */
+
+/* Désactive l'ancrage de défilement dans la zone de messages (on gère le scroll manuellement) */
+.chat-scroll {
+  overflow-anchor: none;
+}

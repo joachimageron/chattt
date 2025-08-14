@@ -48,7 +48,7 @@ export const MessageReactions: React.FC<MessageReactionsProps> = ({
             }`}
           >
             <span>{r.emoji}</span>
-            <span className="text-[10px]">{r.count}</span>
+            <span className="text-xs">{r.count}</span>
           </button>
         </Tooltip>
       ))}
