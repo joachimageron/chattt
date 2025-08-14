@@ -49,8 +49,8 @@ function loadConfig(): SeedConfig {
   return {
     users: parseInt(process.env.SEED_USERS || '10', 10),
     directPairs: parseInt(process.env.SEED_DIRECT_PAIRS || '100', 10),
-    messagesMin: parseInt(process.env.SEED_MESSAGES_MIN || '5', 10),
-    messagesMax: parseInt(process.env.SEED_MESSAGES_MAX || '25', 10),
+    messagesMin: parseInt(process.env.SEED_MESSAGES_MIN || '25', 10),
+    messagesMax: parseInt(process.env.SEED_MESSAGES_MAX || '100', 10),
     password: process.env.SEED_PASSWORD || 'Passw0rd!',
     groups: parseInt(process.env.SEED_GROUPS || '3', 10),
     groupSizeMin: parseInt(process.env.SEED_GROUP_SIZE_MIN || '3', 10),
