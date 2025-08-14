@@ -165,8 +165,8 @@ export function MessageList({
         const showTimestamp = !sameAsNext; // only last in group
         const isMine = user?.id === m.senderId;
         // Show readers under each last message block authored by current user (not just the final message of conversation)
-        const showReaders =
-          isGroupConversation && readers.length > 0 && isMine && !sameAsNext;
+        // Afficher les lecteurs même si le message n'est pas le dernier du groupe
+        const showReaders = isGroupConversation && readers.length > 0 && isMine;
         const isLastOwn = m.id === lastOwnMessageId; // still used for status ticks
         const item = (
           <MessageItem
