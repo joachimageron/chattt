@@ -121,7 +121,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!user) return;
     try {
       if (!this.checkRateLimit(user.id)) {
-        client.emit(ChatEvents.MESSAGE_ERROR, { error: 'rate_limited' });
+        client.emit(ChatEvents.MESSAGE_ERROR, {
+          error: 'rate_limited',
+          tempId: body.tempId,
+        });
         return;
       }
       const message = await this.chatService.sendMessage(body, user);
@@ -144,7 +147,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           },
         });
     } catch (e) {
-      client.emit(ChatEvents.MESSAGE_ERROR, { error: (e as Error).message });
+      client.emit(ChatEvents.MESSAGE_ERROR, {
+        error: (e as Error).message,
+        tempId: body.tempId,
+      });
     }
   }
 
@@ -163,10 +169,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         body.limit ?? 30,
         body.before ? new Date(body.before) : undefined,
       );
+      // getMessages renvoie en DESC (createdAt DESC). On inverse pour le client (ASC) pour traitement/pagination cohérente.
+      const asc = [...messages].reverse();
       client.emit(ChatEvents.MESSAGE_LIST, {
         conversationId: body.conversationId,
-        messages: messages.map(sanitizeMessage),
+        messages: asc.map(sanitizeMessage),
         hasMore: messages.length === (body.limit ?? 30),
+        direction: body.before ? 'older' : 'initial',
       });
     } catch (e) {
       client.emit(ChatEvents.MESSAGE_ERROR, { error: (e as Error).message });

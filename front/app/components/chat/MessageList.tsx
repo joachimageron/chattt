@@ -13,17 +13,27 @@ import { useAuth } from "../providers/AuthProvider";
 import { useChat } from "./ChatContext";
 
 interface MessageListProps {
+  conversationId: string; // pour détecter changement de conversation
   messages: ChatMessage[];
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   loading?: boolean;
+  onLoadMoreTop?: () => void;
+  hasMore?: boolean;
+  onResend?: (id: string) => void;
+  loadingOlder?: boolean;
 }
 
 export function MessageList({
+  conversationId,
   messages,
   onEdit,
   onDelete,
   loading,
+  onLoadMoreTop,
+  hasMore,
+  onResend,
+  loadingOlder,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
@@ -124,9 +134,65 @@ export function MessageList({
     return map;
   }, [messages, participants, user?.id]);
 
+  // Auto scroll: cas 2 => append récent si utilisateur proche du bas (initial géré séparément)
+  const lastId = messages.length ? messages[messages.length - 1].id : undefined;
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    if (!containerRef.current || !lastId) return;
+    const el = containerRef.current;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [lastId]);
+
+  // Scroll bas initial: une seule fois par conversation quand premiers messages arrivent
+  const initialScrolledRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!containerRef.current) return;
+    if (!messages.length) return;
+    if (initialScrolledRef.current.has(conversationId)) return;
+    // Forcer position tout en bas (scrollTop = scrollHeight) pour éviter ancrage
+    const el = containerRef.current;
+    // Utiliser double raf pour laisser le layout se stabiliser
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight; // second réglage au cas où padding/hauteurs tardives
+      });
+    });
+    initialScrolledRef.current.add(conversationId);
+  }, [conversationId, messages.length]);
+
+  // Infinite scroll: observer du haut
+  const topSentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!onLoadMoreTop) return;
+    const el = topSentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            if (hasMore) onLoadMoreTop();
+          }
+        });
+      },
+      { root: containerRef.current, rootMargin: "0px", threshold: 0.01 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [onLoadMoreTop, hasMore]);
+
+  // Utilitaire format date relative (Aujourd'hui / Hier / date locale)
+  const dayLabel = (d: Date) => {
+    const today = new Date();
+    const yday = new Date(Date.now() - 86400000);
+    const sameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+    if (sameDay(d, today)) return "Aujourd'hui";
+    if (sameDay(d, yday)) return "Hier";
+    return d.toLocaleDateString();
+  };
 
   return (
     <ScrollShadow
@@ -135,11 +201,16 @@ export function MessageList({
         containerRef.current = el as HTMLDivElement | null;
       }}
       onScroll={onScroll}
-      className="flex-1 p-4 space-y-2 overflow-y-auto relative"
+      className="flex-1 p-4 space-y-2 overflow-y-auto relative overflow-x-hidden"
     >
       {loading && (
         <div className="flex justify-center py-4">
           <Spinner size="sm" />
+        </div>
+      )}
+      {loadingOlder && (
+        <div className="flex justify-center py-2 text-[11px] text-default-400">
+          Chargement...
         </div>
       )}
       <div style={{ height: padTop }} />
@@ -168,21 +239,39 @@ export function MessageList({
         // Afficher les lecteurs même si le message n'est pas le dernier du groupe
         const showReaders = isGroupConversation && readers.length > 0 && isMine;
         const isLastOwn = m.id === lastOwnMessageId; // still used for status ticks
-        const item = (
-          <MessageItem
-            key={m.id}
-            message={m}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            showStatus={!isGroupConversation && isLastOwn}
-            showAvatar={showAvatar}
-            showTimestamp={showTimestamp}
-            compactAbove={sameAsPrev}
-          />
-        );
+        // Date separator: insérer avant si premier visible ou jour différent du précédent global (pas juste visible slice)
+        const prevGlobalIndex = startIndex + idx - 1;
+        const prevGlobal =
+          prevGlobalIndex >= 0 ? messages[prevGlobalIndex] : undefined;
+        const showDaySeparator = (() => {
+          if (!prevGlobal) return true;
+          const d1 = new Date(prevGlobal.createdAt);
+          const d2 = new Date(m.createdAt);
+          return (
+            d1.getFullYear() !== d2.getFullYear() ||
+            d1.getMonth() !== d2.getMonth() ||
+            d1.getDate() !== d2.getDate()
+          );
+        })();
         return (
           <div key={m.id} className="relative">
-            {item}
+            {showDaySeparator && (
+              <div className="sticky top-0 z-10 flex justify-center my-2">
+                <span className="text-[11px] px-2 py-1 rounded-full bg-content3 text-default-500 shadow-sm border border-default-200/40">
+                  {dayLabel(new Date(m.createdAt))}
+                </span>
+              </div>
+            )}
+            <MessageItem
+              message={m}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onResend={onResend}
+              showStatus={!isGroupConversation && isLastOwn}
+              showAvatar={showAvatar}
+              showTimestamp={showTimestamp}
+              compactAbove={sameAsPrev}
+            />
             {showReaders && (
               <div className="flex flex-row flex-wrap gap-0.5 justify-end mt-0.5 max-w-[60%] ml-auto">
                 {readers.slice(0, 6).map((r) => (
@@ -212,6 +301,8 @@ export function MessageList({
         );
       })}
       <div style={{ height: padBottom }} />
+      {/* top sentinel for infinite scroll */}
+      <div ref={topSentinelRef} className="absolute top-0 h-1 w-full" />
       <div ref={bottomRef} />
     </ScrollShadow>
   );

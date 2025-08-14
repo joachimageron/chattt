@@ -96,7 +96,7 @@ export function ConversationList({ onSelect }: ConversationListProps) {
   // Edition du titre déplacée dans la page principale de chat; pas d'édition ici.
 
   return (
-    <div className="w-72 border-r border-divider flex flex-col">
+    <div className="w-72 border-r border-divider flex flex-col overflow-x-hidden">
       <div className="p-3 flex items-center justify-between gap-2">
         <span className="font-semibold">Conversations</span>
         <Tooltip content="Nouvelle conversation">

@@ -30,4 +30,7 @@ export interface ChatMessage {
   createdAt: string;
   updatedAt?: string;
   sender?: { id: string; email: string; name?: string | null };
+  // Client-only flags for optimistic & error states
+  _optimistic?: boolean;
+  _error?: string;
 }

@@ -21,6 +21,7 @@ interface MessageItemProps {
   showAvatar?: boolean; // afficher avatar (premier message d'un groupe)
   showTimestamp?: boolean; // afficher timestamp (dernier message d'un groupe)
   compactAbove?: boolean; // message collé au précédent (même groupe)
+  onResend?: (id: string) => void;
 }
 
 export function MessageItem({
@@ -31,6 +32,7 @@ export function MessageItem({
   showAvatar = true,
   showTimestamp = true,
   compactAbove,
+  onResend,
 }: MessageItemProps) {
   const { user } = useAuth();
   const isMine = user?.id === message.senderId;
@@ -49,8 +51,28 @@ export function MessageItem({
   const content = useMemo(() => {
     if (message.isDeleted)
       return <span className="italic text-default-400">Message supprimé</span>;
-    return <span>{message.content}</span>;
-  }, [message]);
+    return (
+      <span>
+        {message.content}
+        {message._optimistic && !message._error && (
+          <span className="ml-2 text-[10px] text-default-400">(envoi…)</span>
+        )}
+        {message._error && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onResend?.(message.id);
+            }}
+            className="ml-2 text-[10px] text-danger underline"
+            title={message._error}
+          >
+            Réessayer
+          </button>
+        )}
+      </span>
+    );
+  }, [message, onResend]);
 
   const { canEdit, canDelete } = useMemo(() => {
     const res = { canEdit: false, canDelete: false };

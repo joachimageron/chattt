@@ -14,12 +14,12 @@ export default function ChatPage() {
   const { user, isLoading } = useAuth();
   const {
     sendMessage,
-    joinConversation,
     loadMessages,
     editMessage,
     deleteMessage,
     updateConversationTitle,
     emitTyping,
+    resendMessage,
   } = useChatSocket();
   const chat = useChat();
   const { activeConversationId, messages, setActiveConversation } = chat;
@@ -119,11 +119,8 @@ export default function ChatPage() {
   };
 
   useEffect(() => {
-    if (activeConversationId) {
-      joinConversation(activeConversationId);
-      loadMessages(activeConversationId);
-    }
-  }, [activeConversationId, joinConversation, loadMessages]);
+    // Le hook useChatSocket gère déjà le join + premier chargement.
+  }, [activeConversationId]);
 
   // Determine current conversation + display title early (before conditional returns)
   const currentConversation = activeConversationId
@@ -132,6 +129,9 @@ export default function ChatPage() {
   const currentMessages = activeConversationId
     ? (messages[activeConversationId] as ChatMessage[] | undefined) || []
     : [];
+  const currentMeta = activeConversationId
+    ? chat.meta[activeConversationId] || { hasMore: true, loadingOlder: false }
+    : { hasMore: false, loadingOlder: false };
 
   // Update editable group title when conversation changes
   useEffect(() => {
@@ -188,9 +188,9 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] bg-background">
+    <div className="flex h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] bg-background overflow-x-hidden">
       <ConversationList onSelect={handleSelectConversation} />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-x-hidden">
         {activeConversationId ? (
           <>
             <div className="flex items-center gap-2 px-4 py-2 border-b border-divider bg-content1/40 backdrop-blur-sm">
@@ -241,9 +241,23 @@ export default function ChatPage() {
               )}
             </div>
             <MessageList
+              conversationId={activeConversationId}
               messages={currentMessages}
               onEdit={startEdit}
               onDelete={handleDelete}
+              hasMore={currentMeta.hasMore}
+              loadingOlder={currentMeta.loadingOlder}
+              onLoadMoreTop={() => {
+                if (!activeConversationId) return;
+                if (currentMeta.loadingOlder || !currentMeta.hasMore) return;
+                const oldest = currentMessages[0];
+                if (!oldest) return;
+                chat.setLoadingOlder(activeConversationId, true);
+                loadMessages(activeConversationId, oldest.createdAt);
+              }}
+              onResend={(id) =>
+                activeConversationId && resendMessage(activeConversationId, id)
+              }
             />
             {/* Typing indicator */}
             {(() => {

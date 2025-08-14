@@ -95,13 +95,17 @@ export function useChatSocket() {
       conversationId: string;
       messages: ChatMessage[];
       hasMore: boolean;
+      direction?: "initial" | "older";
     }) => {
       console.log(
         "[socket] message.list",
         payload.conversationId,
         payload.messages.length
       );
-      chat.upsertMessages(payload.conversationId, payload.messages);
+      const isPrepend = payload.direction === "older";
+      chat.upsertMessages(payload.conversationId, payload.messages, isPrepend);
+      chat.setHasMore(payload.conversationId, payload.hasMore);
+      chat.setLoadingOlder(payload.conversationId, false);
       // Marquer comme deliverés tous les messages reçus (non envoyés par nous) encore en status SENT
       const toDeliver = payload.messages
         .filter(
@@ -130,12 +134,13 @@ export function useChatSocket() {
       }
     };
 
-    const onMessageError = (payload: { error: string }) => {
+    const onMessageError = (payload: { error: string; tempId?: string }) => {
       addToast({
         title: "Erreur message",
         description: payload.error,
         color: "danger",
       });
+      if (payload.tempId) chat.markMessageError(payload.tempId, payload.error);
     };
 
     socket.on("connect", onConnect);
@@ -243,6 +248,7 @@ export function useChatSocket() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         sender: { id: user.id, email: user.email, name: user.name },
+        _optimistic: true,
       };
       chat.upsertMessages(conversationId, [optimistic]);
       socketRef.current.emit(ChatEvents.MESSAGE_SEND, {
@@ -366,6 +372,18 @@ export function useChatSocket() {
     editMessage,
     deleteMessage,
     updateConversationTitle,
+    resendMessage: (conversationId: string, tempId: string) => {
+      const list = chat.messages[conversationId] || [];
+      const msg = list.find((m) => m.id === tempId);
+      if (!msg || !msg._error || !socketRef.current) return;
+      chat.resetMessagePending(tempId);
+      socketRef.current.emit(ChatEvents.MESSAGE_SEND, {
+        conversationId,
+        content: msg.content,
+        tempId,
+        type: msg.type,
+      });
+    },
     emitTyping: (conversationId: string, isTyping: boolean) => {
       if (!socketRef.current) return;
       socketRef.current.emit(

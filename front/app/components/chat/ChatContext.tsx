@@ -13,6 +13,7 @@ import { ConversationSummary } from "./types";
 interface ChatContextValue {
   conversations: Record<string, ConversationSummary>;
   messages: Record<string, ChatMessage[]>;
+  meta: Record<string, { hasMore: boolean; loadingOlder: boolean }>;
   activeConversationId: string | null;
   setActiveConversation: (id: string | null) => void;
   setConversations: (convs: ConversationSummary[]) => void;
@@ -30,6 +31,10 @@ interface ChatContextValue {
   updateMessage: (msg: ChatMessage) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   confirmMessage: (tempId: string, real: ChatMessage) => void;
+  markMessageError: (tempId: string, error: string) => void;
+  resetMessagePending: (id: string) => void;
+  setHasMore: (conversationId: string, hasMore: boolean) => void;
+  setLoadingOlder: (conversationId: string, loading: boolean) => void;
   typing: Record<string, Record<string, number>>; // conversationId -> userId -> last activity epoch ms
   setTyping: (
     conversationId: string,
@@ -45,6 +50,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     Record<string, ConversationSummary>
   >({});
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
+  const [meta, setMeta] = useState<
+    Record<string, { hasMore: boolean; loadingOlder: boolean }>
+  >({});
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
@@ -66,13 +74,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     (conversationId: string, msgs: ChatMessage[], prepend?: boolean) => {
       setMessages((prev) => {
         const existing = prev[conversationId] || [];
-        const merged = prepend
-          ? [...msgs, ...existing]
-          : [
-              ...existing,
-              ...msgs.filter((m) => !existing.find((e) => e.id === m.id)),
-            ];
-        merged.sort(
+        const map = new Map<string, ChatMessage>();
+        if (prepend) {
+          msgs.forEach((m) => map.set(m.id, m));
+          existing.forEach((m) => map.set(m.id, m));
+        } else {
+          existing.forEach((m) => map.set(m.id, m));
+          msgs.forEach((m) => map.set(m.id, m));
+        }
+        const merged = Array.from(map.values()).sort(
           (a, b) =>
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
@@ -96,6 +106,61 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return { ...prev, [real.conversationId]: merged };
     });
   }, []);
+
+  const markMessageError = useCallback((tempId: string, error: string) => {
+    setMessages((prev) => {
+      const newState: typeof prev = { ...prev };
+      for (const [cid, list] of Object.entries(prev)) {
+        const idx = list.findIndex((m) => m.id === tempId);
+        if (idx !== -1) {
+          const copy = [...list];
+          copy[idx] = { ...copy[idx], _error: error, _optimistic: true };
+          newState[cid] = copy;
+          break;
+        }
+      }
+      return newState;
+    });
+  }, []);
+
+  const resetMessagePending = useCallback((id: string) => {
+    setMessages((prev) => {
+      const newState: typeof prev = { ...prev };
+      for (const [cid, list] of Object.entries(prev)) {
+        const idx = list.findIndex((m) => m.id === id);
+        if (idx !== -1) {
+          const copy = [...list];
+          copy[idx] = { ...copy[idx], _error: undefined };
+          newState[cid] = copy;
+          break;
+        }
+      }
+      return newState;
+    });
+  }, []);
+
+  const setHasMore = useCallback((conversationId: string, hasMore: boolean) => {
+    setMeta((prev) => ({
+      ...prev,
+      [conversationId]: {
+        ...(prev[conversationId] || { loadingOlder: false }),
+        hasMore,
+      },
+    }));
+  }, []);
+
+  const setLoadingOlder = useCallback(
+    (conversationId: string, loading: boolean) => {
+      setMeta((prev) => ({
+        ...prev,
+        [conversationId]: {
+          ...(prev[conversationId] || { hasMore: true }),
+          loadingOlder: loading,
+        },
+      }));
+    },
+    []
+  );
 
   const updateMessage = useCallback((msg: ChatMessage) => {
     setMessages((prev) => {
@@ -153,6 +218,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     () => ({
       conversations,
       messages,
+      meta,
       activeConversationId,
       setActiveConversation: setActiveConversationId,
       setConversations,
@@ -161,6 +227,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       updateMessage,
       deleteMessage,
       confirmMessage,
+      markMessageError,
+      resetMessagePending,
+      setHasMore,
+      setLoadingOlder,
       updateParticipantRead,
       typing: typingState,
       setTyping: (
@@ -183,6 +253,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [
       conversations,
       messages,
+      meta,
       activeConversationId,
       setConversations,
       upsertConversation,
@@ -190,6 +261,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       updateMessage,
       deleteMessage,
       confirmMessage,
+      markMessageError,
+      resetMessagePending,
+      setHasMore,
+      setLoadingOlder,
       updateParticipantRead,
       typingState,
     ]
