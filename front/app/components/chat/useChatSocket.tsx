@@ -2,6 +2,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { addToast } from "@heroui/react";
 import { getSocket, ChatMessage } from "./socketClient";
+import { ChatEvents } from "./events";
 import { MessageStatus, MessageType, ConversationSummary } from "./types";
 import { useAuth } from "../providers/AuthProvider";
 import { useChat } from "./ChatContext";
@@ -21,7 +22,7 @@ export function useChatSocket() {
 
     const onConnect = () => {
       console.log("[socket] connected");
-      socket.emit("conversation.list");
+      socket.emit(ChatEvents.CONVERSATION_LIST);
     };
     const onError = (err: unknown) => {
       console.error("Socket error", err);
@@ -139,16 +140,16 @@ export function useChatSocket() {
 
     socket.on("connect", onConnect);
     socket.on("error", onError);
-    socket.on("conversation.list", onConversationList);
-    socket.on("message.new", onMessageNew);
-    socket.on("message.sent", onMessageSent);
-    socket.on("message.updated", onMessageUpdated);
-    socket.on("message.deleted", onMessageDeleted);
-    socket.on("conversation.created", onConversationCreated);
-    socket.on("conversation.updated", onConversationUpdated);
-    socket.on("message.list", onMessageList);
+    socket.on(ChatEvents.CONVERSATION_LIST_DATA, onConversationList);
+    socket.on(ChatEvents.MESSAGE_NEW, onMessageNew);
+    socket.on(ChatEvents.MESSAGE_SENT, onMessageSent);
+    socket.on(ChatEvents.MESSAGE_UPDATED, onMessageUpdated);
+    socket.on(ChatEvents.MESSAGE_DELETED, onMessageDeleted);
+    socket.on(ChatEvents.CONVERSATION_CREATED, onConversationCreated);
+    socket.on(ChatEvents.CONVERSATION_UPDATED, onConversationUpdated);
+    socket.on(ChatEvents.MESSAGE_LIST, onMessageList);
     socket.on(
-      "message.delivered",
+      ChatEvents.MESSAGE_DELIVERED,
       (p: { messageIds: string[]; deliveredAt?: string }) => {
         if (!chat.activeConversationId) return;
         const list = chat.messages[chat.activeConversationId] || [];
@@ -165,7 +166,7 @@ export function useChatSocket() {
       }
     );
     socket.on(
-      "message.read",
+      ChatEvents.MESSAGE_READ,
       (p: { messageIds: string[]; userId: string; readAt?: string }) => {
         if (!chat.activeConversationId) return;
         // Pour simplifier: on met à jour les messages dont nous sommes l'auteur
@@ -182,23 +183,23 @@ export function useChatSocket() {
         );
       }
     );
-    socket.on("message.error", onMessageError);
+    socket.on(ChatEvents.MESSAGE_ERROR, onMessageError);
     socket.on(
-      "participant.read",
+      ChatEvents.PARTICIPANT_READ,
       (p: { conversationId: string; userId: string; lastReadAt?: string }) => {
         chat.updateParticipantRead(p.conversationId, p.userId, p.lastReadAt);
       }
     );
     // Typing indicators
     socket.on(
-      "typing.started",
+      ChatEvents.TYPING_STARTED,
       (p: { conversationId: string; userId: string; at?: string }) => {
         if (p.userId === user?.id) return; // ignore self
         chat.setTyping(p.conversationId, p.userId, true);
       }
     );
     socket.on(
-      "typing.stopped",
+      ChatEvents.TYPING_STOPPED,
       (p: { conversationId: string; userId: string; at?: string }) => {
         if (p.userId === user?.id) return;
         chat.setTyping(p.conversationId, p.userId, false);
@@ -208,20 +209,20 @@ export function useChatSocket() {
     return () => {
       socket.off("connect", onConnect);
       socket.off("error", onError);
-      socket.off("conversation.list", onConversationList);
-      socket.off("message.new", onMessageNew);
-      socket.off("message.sent", onMessageSent);
-      socket.off("message.updated", onMessageUpdated);
-      socket.off("message.deleted", onMessageDeleted);
-      socket.off("conversation.created", onConversationCreated);
-      socket.off("conversation.updated", onConversationUpdated);
-      socket.off("message.list", onMessageList);
-      socket.off("message.error", onMessageError);
-      socket.off("participant.read");
-      socket.off("message.delivered");
-      socket.off("message.read");
-      socket.off("typing.started");
-      socket.off("typing.stopped");
+      socket.off(ChatEvents.CONVERSATION_LIST_DATA, onConversationList);
+      socket.off(ChatEvents.MESSAGE_NEW, onMessageNew);
+      socket.off(ChatEvents.MESSAGE_SENT, onMessageSent);
+      socket.off(ChatEvents.MESSAGE_UPDATED, onMessageUpdated);
+      socket.off(ChatEvents.MESSAGE_DELETED, onMessageDeleted);
+      socket.off(ChatEvents.CONVERSATION_CREATED, onConversationCreated);
+      socket.off(ChatEvents.CONVERSATION_UPDATED, onConversationUpdated);
+      socket.off(ChatEvents.MESSAGE_LIST, onMessageList);
+      socket.off(ChatEvents.MESSAGE_ERROR, onMessageError);
+      socket.off(ChatEvents.PARTICIPANT_READ);
+      socket.off(ChatEvents.MESSAGE_DELIVERED);
+      socket.off(ChatEvents.MESSAGE_READ);
+      socket.off(ChatEvents.TYPING_STARTED);
+      socket.off(ChatEvents.TYPING_STOPPED);
     };
   }, [user, chat]);
 
@@ -244,7 +245,7 @@ export function useChatSocket() {
         sender: { id: user.id, email: user.email, name: user.name },
       };
       chat.upsertMessages(conversationId, [optimistic]);
-      socketRef.current.emit("message.send", {
+      socketRef.current.emit(ChatEvents.MESSAGE_SEND, {
         conversationId,
         content,
         tempId,
@@ -257,7 +258,7 @@ export function useChatSocket() {
   const loadMessages = useCallback(
     (conversationId: string, before?: string) => {
       if (!socketRef.current) return;
-      socketRef.current.emit("message.load", {
+      socketRef.current.emit(ChatEvents.MESSAGE_LOAD, {
         conversationId,
         before,
         limit: 30,
@@ -268,13 +269,13 @@ export function useChatSocket() {
 
   const joinConversation = useCallback((conversationId: string) => {
     if (!socketRef.current) return;
-    socketRef.current.emit("room.join", { conversationId });
+    socketRef.current.emit(ChatEvents.ROOM_JOIN, { conversationId });
   }, []);
 
   const editMessage = useCallback(
     (messageId: string, conversationId: string, content: string) => {
       if (!socketRef.current) return;
-      socketRef.current.emit("message.edit", {
+      socketRef.current.emit(ChatEvents.MESSAGE_EDIT, {
         messageId,
         conversationId,
         content,
@@ -286,7 +287,10 @@ export function useChatSocket() {
   const deleteMessage = useCallback(
     (messageId: string, conversationId: string) => {
       if (!socketRef.current) return;
-      socketRef.current.emit("message.delete", { messageId, conversationId });
+      socketRef.current.emit(ChatEvents.MESSAGE_DELETE, {
+        messageId,
+        conversationId,
+      });
     },
     []
   );
@@ -298,7 +302,7 @@ export function useChatSocket() {
       type: "DIRECT" | "GROUP" = "DIRECT"
     ) => {
       if (!socketRef.current) return;
-      socketRef.current.emit("conversation.create", {
+      socketRef.current.emit(ChatEvents.CONVERSATION_CREATE, {
         participantUserIds,
         title,
         type,
@@ -310,7 +314,7 @@ export function useChatSocket() {
   const updateConversationTitle = useCallback(
     (conversationId: string, title: string) => {
       if (!socketRef.current) return;
-      socketRef.current.emit("conversation.title.update", {
+      socketRef.current.emit(ChatEvents.CONVERSATION_TITLE_UPDATE, {
         conversationId,
         title,
       });
@@ -364,9 +368,12 @@ export function useChatSocket() {
     updateConversationTitle,
     emitTyping: (conversationId: string, isTyping: boolean) => {
       if (!socketRef.current) return;
-      socketRef.current.emit(isTyping ? "typing.start" : "typing.stop", {
-        conversationId,
-      });
+      socketRef.current.emit(
+        isTyping ? ChatEvents.TYPING_START : ChatEvents.TYPING_STOP,
+        {
+          conversationId,
+        }
+      );
     },
   };
 }

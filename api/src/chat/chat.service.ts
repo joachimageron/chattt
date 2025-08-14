@@ -39,6 +39,12 @@ export class ChatService {
   async sendMessage(input: SendMessageInput, sender: User): Promise<Message> {
     await this.ensureParticipant(input.conversationId, sender.id);
 
+    // Simple length limit to prevent abuse (can be externalized to config)
+    const MAX_LEN = 4000;
+    if (input.content.length > MAX_LEN) {
+      throw new ForbiddenException('Message too long');
+    }
+
     // Crée et rattache explicitement le sender pour que l'objet émis via WebSocket
     // contienne déjà { sender: { id, email, name } } et évite l'affichage de l'id côté front.
     const message = this.messageRepo.create({
@@ -51,6 +57,11 @@ export class ChatService {
     // Attacher l'entité utilisateur (eager ne recharge pas toujours après un save direct)
     message.sender = sender;
     await this.messageRepo.save(message);
+    // Update conversation.updatedAt for ordering & real-time list reordering
+    await this.convoRepo.update(
+      { id: input.conversationId },
+      { updatedAt: new Date() },
+    );
     return message;
   }
 
@@ -131,6 +142,9 @@ export class ChatService {
     const created = message.createdAt?.getTime?.() ?? 0;
     if (now - created > EDIT_WINDOW_MS) {
       throw new ForbiddenException('Edit window expired');
+    }
+    if (message.content === content) {
+      return message; // no change, avoid unnecessary write/broadcast
     }
     message.content = content;
     message.editedAt = new Date();
