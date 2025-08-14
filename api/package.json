@@ -106,7 +106,9 @@
     ]
   },
   "trustedDependencies": [
+    "@apollo/protobufjs",
     "@nestjs/core",
-    "@swc/core"
+    "@swc/core",
+    "bcrypt"
   ]
 }

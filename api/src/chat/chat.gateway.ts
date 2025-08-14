@@ -60,6 +60,52 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
   }
 
+  // -------------------- Small infrastructure helpers (refactor) --------------------
+  /** Ensure the socket has an authenticated user; if absent, emit an error (once) and return null. */
+  private ensureUser(client: AuthedSocket): User | null {
+    const user = client.data.user;
+    if (!user) {
+      // Avoid spamming client: minimal error envelope kept backward compatible
+      client.emit(ChatEvents.ERROR, { message: 'unauthenticated' });
+      this.logger.warn(`Unauthenticated event from socket ${client.id}`);
+      return null;
+    }
+    return user;
+  }
+
+  /** Execute an async action with unified error handling. */
+  private async runSafe(
+    client: AuthedSocket,
+    action: () => Promise<void>,
+    onError: (err: unknown) => void,
+  ) {
+    try {
+      await action();
+    } catch (e) {
+      onError(e);
+    }
+  }
+
+  /** Convenience for non message-specific errors (emit ChatEvents.ERROR). */
+  private runGeneral(client: AuthedSocket, action: () => Promise<void>): void {
+    this.runSafe(client, action, (e) => {
+      const message = (e as Error)?.message || 'unknown_error';
+      client.emit(ChatEvents.ERROR, { message });
+    });
+  }
+
+  /** Convenience for message operations (emit ChatEvents.MESSAGE_ERROR). */
+  private runMessage(
+    client: AuthedSocket,
+    action: () => Promise<void>,
+    buildPayload: () => Record<string, unknown> = () => ({}),
+  ): void {
+    this.runSafe(client, action, (e) => {
+      const error = (e as Error)?.message || 'unknown_error';
+      client.emit(ChatEvents.MESSAGE_ERROR, { error, ...buildPayload() });
+    });
+  }
+
   @SubscribeMessage(ChatEvents.PING)
   handlePing(@ConnectedSocket() client: AuthedSocket) {
     this.logger.log(
@@ -74,20 +120,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() payload: { conversationId: string },
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
     const { conversationId } = payload;
-    try {
+    this.runGeneral(client, async () => {
       await this.participants.ensureParticipant(conversationId, user.id);
       await client.join(conversationId);
       client.data.joinedRooms?.add(conversationId);
       client.emit(ChatEvents.ROOM_JOINED, { conversationId });
-    } catch (e) {
-      client.emit(ChatEvents.ERROR, {
-        message: 'join_failed',
-        details: (e as Error).message,
-      });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.ROOM_LEAVE)
@@ -125,41 +166,39 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: SendMessageInput & { tempId?: string },
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
-    try {
-      if (!this.checkRateLimit(user.id)) {
-        client.emit(ChatEvents.MESSAGE_ERROR, {
-          error: 'rate_limited',
+    this.runMessage(
+      client,
+      async () => {
+        if (!this.checkRateLimit(user.id)) {
+          client.emit(ChatEvents.MESSAGE_ERROR, {
+            error: 'rate_limited',
+            tempId: body.tempId,
+          });
+          return;
+        }
+        const message = await this.messages.sendMessage(body, user);
+        const sanitized = sanitizeMessage(message);
+        this.server
+          .to(message.conversationId)
+          .emit(ChatEvents.MESSAGE_NEW, sanitized);
+        client.emit(ChatEvents.MESSAGE_SENT, {
           tempId: body.tempId,
+          message: sanitized,
         });
-        return;
-      }
-      const message = await this.messages.sendMessage(body, user);
-      const sanitized = sanitizeMessage(message);
-      this.server
-        .to(message.conversationId)
-        .emit(ChatEvents.MESSAGE_NEW, sanitized);
-      client.emit(ChatEvents.MESSAGE_SENT, {
-        tempId: body.tempId,
-        message: sanitized,
-      });
-      // Light conversation update (lastMessage + updatedAt) for list reordering
-      this.server
-        .to(message.conversationId)
-        .emit(ChatEvents.CONVERSATION_UPDATED, {
-          conversation: {
-            id: message.conversationId,
-            updatedAt: new Date().toISOString(),
-            lastMessage: sanitized,
-          },
-        });
-    } catch (e) {
-      client.emit(ChatEvents.MESSAGE_ERROR, {
-        error: (e as Error).message,
-        tempId: body.tempId,
-      });
-    }
+        this.server
+          .to(message.conversationId)
+          .emit(ChatEvents.CONVERSATION_UPDATED, {
+            conversation: {
+              id: message.conversationId,
+              updatedAt: new Date().toISOString(),
+              lastMessage: sanitized,
+            },
+          });
+      },
+      () => ({ tempId: body.tempId }),
+    );
   }
 
   @SubscribeMessage(ChatEvents.MESSAGE_LOAD)
@@ -168,16 +207,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     body: { conversationId: string; before?: string; limit?: number },
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
-    try {
+    this.runMessage(client, async () => {
       await this.participants.ensureParticipant(body.conversationId, user.id);
       const page = await this.messages.getMessages(
         body.conversationId,
         body.limit ?? 30,
         body.before || undefined,
       );
-      // page.messages renvoyés en DESC (createdAt DESC). On inverse pour le client (ASC) pour traitement/pagination cohérente.
       const asc = [...page.messages].reverse();
       client.emit(ChatEvents.MESSAGE_LIST, {
         conversationId: body.conversationId,
@@ -186,9 +224,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         nextCursor: page.nextCursor,
         direction: body.before ? 'older' : 'initial',
       });
-    } catch (e) {
-      client.emit(ChatEvents.MESSAGE_ERROR, { error: (e as Error).message });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.MESSAGE_DELIVERED)
@@ -197,9 +233,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     body: { conversationId: string; messageIds: string[] },
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
-    try {
+    this.runMessage(client, async () => {
       await this.messages.markDelivered(
         body.conversationId,
         body.messageIds,
@@ -210,9 +246,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         conversationId: body.conversationId,
         deliveredAt: new Date().toISOString(),
       });
-    } catch (e) {
-      client.emit(ChatEvents.MESSAGE_ERROR, { error: (e as Error).message });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.MESSAGE_READ)
@@ -221,9 +255,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     body: { conversationId: string; messageIds: string[] },
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
-    try {
+    this.runMessage(client, async () => {
       await this.messages.markReadMessages(
         body.conversationId,
         body.messageIds,
@@ -244,9 +278,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         userId: user.id,
         lastReadAt: participant.lastReadAt?.toISOString?.(),
       });
-    } catch (e) {
-      client.emit(ChatEvents.MESSAGE_ERROR, { error: (e as Error).message });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.MESSAGE_EDIT)
@@ -255,9 +287,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     body: { messageId: string; content: string; conversationId: string },
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
-    try {
+    this.runMessage(client, async () => {
       const updated = await this.messages.editMessage(
         body.messageId,
         user.id,
@@ -266,9 +298,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(body.conversationId).emit(ChatEvents.MESSAGE_UPDATED, {
         message: sanitizeMessage(updated),
       });
-    } catch (e) {
-      client.emit(ChatEvents.MESSAGE_ERROR, { error: (e as Error).message });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.MESSAGE_DELETE)
@@ -277,9 +307,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     body: { messageId: string; conversationId: string },
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
-    try {
+    this.runMessage(client, async () => {
       const deleted = await this.messages.deleteMessage(
         body.messageId,
         user.id,
@@ -287,9 +317,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(body.conversationId).emit(ChatEvents.MESSAGE_DELETED, {
         messageId: deleted.id,
       });
-    } catch (e) {
-      client.emit(ChatEvents.MESSAGE_ERROR, { error: (e as Error).message });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.REACTION_ADD)
@@ -298,9 +326,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     body: { messageId: string; conversationId: string; emoji: string },
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
-    try {
+    this.runMessage(client, async () => {
       const reactions = await this.reactions.addReaction(
         body.messageId,
         body.conversationId,
@@ -317,9 +345,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           createdAt: r.createdAt,
         })),
       });
-    } catch (e) {
-      client.emit(ChatEvents.MESSAGE_ERROR, { error: (e as Error).message });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.REACTION_REMOVE)
@@ -328,9 +354,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     body: { messageId: string; conversationId: string; emoji: string },
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
-    try {
+    this.runMessage(client, async () => {
       const reactions = await this.reactions.removeReaction(
         body.messageId,
         body.conversationId,
@@ -347,25 +373,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           createdAt: r.createdAt,
         })),
       });
-    } catch (e) {
-      client.emit(ChatEvents.MESSAGE_ERROR, { error: (e as Error).message });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.CONVERSATION_LIST)
   async handleListConversations(@ConnectedSocket() client: AuthedSocket) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
-    try {
+    this.runGeneral(client, async () => {
       const conversations = await this.conversations.listConversationsForUser(
         user.id,
       );
       client.emit(ChatEvents.CONVERSATION_LIST_DATA, {
         conversations: conversations.map(sanitizeConversation),
       });
-    } catch (e) {
-      client.emit(ChatEvents.ERROR, { message: (e as Error).message });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.CONVERSATION_CREATE)
@@ -373,18 +395,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: CreateConversationInput,
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
-    try {
+    this.runGeneral(client, async () => {
       const convo = await this.conversations.createConversation(user.id, body);
-      // join creator to room automatically
       await client.join(convo.id);
       client.data.joinedRooms?.add(convo.id);
-      // emit to creator
       client.emit(ChatEvents.CONVERSATION_CREATED, {
         conversation: sanitizeConversation(convo),
       });
-      // inform other participants if they are connected
       convo.participants
         .filter((p) => p.userId !== user.id)
         .forEach(() => {
@@ -392,9 +411,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
             conversation: sanitizeConversation(convo),
           });
         });
-    } catch (e) {
-      client.emit(ChatEvents.ERROR, { message: (e as Error).message });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.CONVERSATION_TITLE_UPDATE)
@@ -402,9 +419,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: UpdateConversationTitleInput,
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
-    try {
+    this.runGeneral(client, async () => {
       const convo = await this.conversations.updateConversationTitle(
         body.conversationId,
         user.id,
@@ -413,9 +430,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(convo.id).emit(ChatEvents.CONVERSATION_UPDATED, {
         conversation: sanitizeConversation(convo),
       });
-    } catch (e) {
-      client.emit(ChatEvents.ERROR, { message: (e as Error).message });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.TYPING_START)
@@ -423,20 +438,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { conversationId: string },
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
     if (!body?.conversationId) return;
-    try {
+    this.runGeneral(client, async () => {
       await this.participants.ensureParticipant(body.conversationId, user.id);
-      // Broadcast aux autres participants uniquement (room broadcast sans l'émetteur)
       client.to(body.conversationId).emit(ChatEvents.TYPING_STARTED, {
         conversationId: body.conversationId,
         userId: user.id,
         at: new Date().toISOString(),
       });
-    } catch (e) {
-      client.emit(ChatEvents.ERROR, { message: (e as Error).message });
-    }
+    });
   }
 
   @SubscribeMessage(ChatEvents.TYPING_STOP)
@@ -444,18 +456,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { conversationId: string },
   ) {
-    const user = client.data.user;
+    const user = this.ensureUser(client);
     if (!user) return;
     if (!body?.conversationId) return;
-    try {
+    this.runGeneral(client, async () => {
       await this.participants.ensureParticipant(body.conversationId, user.id);
       client.to(body.conversationId).emit(ChatEvents.TYPING_STOPPED, {
         conversationId: body.conversationId,
         userId: user.id,
         at: new Date().toISOString(),
       });
-    } catch (e) {
-      client.emit(ChatEvents.ERROR, { message: (e as Error).message });
-    }
+    });
   }
 }
