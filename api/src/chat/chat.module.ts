@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ChatGateway } from './chat.gateway';
-import { ChatService } from './chat.service';
+import { ParticipantService } from './services/participant.service';
+import { ReactionService } from './services/reaction.service';
+import { MessageService } from './services/message.service';
+import { ConversationService } from './services/conversation.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Message } from './entities/message.entity';
 import { Conversation } from './entities/conversation.entity';
@@ -16,7 +19,18 @@ import { MessageReaction } from './entities/messageReaction.entity';
       MessageReaction,
     ]),
   ],
-  providers: [ChatGateway, ChatService],
-  exports: [ChatService],
+  providers: [
+    ChatGateway,
+    ParticipantService,
+    ReactionService,
+    MessageService,
+    ConversationService,
+  ],
+  exports: [
+    ParticipantService,
+    ReactionService,
+    MessageService,
+    ConversationService,
+  ],
 })
 export class ChatModule {}

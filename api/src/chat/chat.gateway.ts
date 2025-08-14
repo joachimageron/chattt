@@ -10,7 +10,10 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { User } from '../users/entities/user.entity';
-import { ChatService } from './chat.service';
+import { ParticipantService } from './services/participant.service';
+import { MessageService } from './services/message.service';
+import { ReactionService } from './services/reaction.service';
+import { ConversationService } from './services/conversation.service';
 import { SendMessageInput } from './dto/send-message.input';
 import { CreateConversationInput } from './dto/create-conversation.input';
 import { sanitizeConversation, sanitizeMessage } from './sanitize';
@@ -32,7 +35,12 @@ interface AuthedSocket extends Socket {
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
 
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly participants: ParticipantService,
+    private readonly messages: MessageService,
+    private readonly reactions: ReactionService,
+    private readonly conversations: ConversationService,
+  ) {}
 
   @WebSocketServer()
   server: Server;
@@ -70,7 +78,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!user) return;
     const { conversationId } = payload;
     try {
-      await this.chatService.ensureParticipant(conversationId, user.id);
+      await this.participants.ensureParticipant(conversationId, user.id);
       await client.join(conversationId);
       client.data.joinedRooms?.add(conversationId);
       client.emit(ChatEvents.ROOM_JOINED, { conversationId });
@@ -127,7 +135,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
         return;
       }
-      const message = await this.chatService.sendMessage(body, user);
+      const message = await this.messages.sendMessage(body, user);
       const sanitized = sanitizeMessage(message);
       this.server
         .to(message.conversationId)
@@ -163,18 +171,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = client.data.user;
     if (!user) return;
     try {
-      await this.chatService.ensureParticipant(body.conversationId, user.id);
-      const messages = await this.chatService.getMessages(
+      await this.participants.ensureParticipant(body.conversationId, user.id);
+      const page = await this.messages.getMessages(
         body.conversationId,
         body.limit ?? 30,
-        body.before ? new Date(body.before) : undefined,
+        body.before || undefined,
       );
-      // getMessages renvoie en DESC (createdAt DESC). On inverse pour le client (ASC) pour traitement/pagination cohérente.
-      const asc = [...messages].reverse();
+      // page.messages renvoyés en DESC (createdAt DESC). On inverse pour le client (ASC) pour traitement/pagination cohérente.
+      const asc = [...page.messages].reverse();
       client.emit(ChatEvents.MESSAGE_LIST, {
         conversationId: body.conversationId,
         messages: asc.map(sanitizeMessage),
-        hasMore: messages.length === (body.limit ?? 30),
+        hasMore: page.hasMore,
+        nextCursor: page.nextCursor,
         direction: body.before ? 'older' : 'initial',
       });
     } catch (e) {
@@ -191,7 +200,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = client.data.user;
     if (!user) return;
     try {
-      await this.chatService.markDelivered(
+      await this.messages.markDelivered(
         body.conversationId,
         body.messageIds,
         user.id,
@@ -215,13 +224,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = client.data.user;
     if (!user) return;
     try {
-      await this.chatService.markReadMessages(
+      await this.messages.markReadMessages(
         body.conversationId,
         body.messageIds,
         user.id,
       );
-      // Récupère la date de lecture de ce participant pour mise à jour fine côté front
-      const participant = await this.chatService.ensureParticipant(
+      const participant = await this.participants.ensureParticipant(
         body.conversationId,
         user.id,
       );
@@ -250,7 +258,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = client.data.user;
     if (!user) return;
     try {
-      const updated = await this.chatService.editMessage(
+      const updated = await this.messages.editMessage(
         body.messageId,
         user.id,
         body.content,
@@ -272,7 +280,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = client.data.user;
     if (!user) return;
     try {
-      const deleted = await this.chatService.deleteMessage(
+      const deleted = await this.messages.deleteMessage(
         body.messageId,
         user.id,
       );
@@ -293,7 +301,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = client.data.user;
     if (!user) return;
     try {
-      const reactions = await this.chatService.addReaction(
+      const reactions = await this.reactions.addReaction(
         body.messageId,
         body.conversationId,
         user,
@@ -323,7 +331,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = client.data.user;
     if (!user) return;
     try {
-      const reactions = await this.chatService.removeReaction(
+      const reactions = await this.reactions.removeReaction(
         body.messageId,
         body.conversationId,
         user,
@@ -349,7 +357,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = client.data.user;
     if (!user) return;
     try {
-      const conversations = await this.chatService.listConversationsForUser(
+      const conversations = await this.conversations.listConversationsForUser(
         user.id,
       );
       client.emit(ChatEvents.CONVERSATION_LIST_DATA, {
@@ -368,7 +376,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = client.data.user;
     if (!user) return;
     try {
-      const convo = await this.chatService.createConversation(user.id, body);
+      const convo = await this.conversations.createConversation(user.id, body);
       // join creator to room automatically
       await client.join(convo.id);
       client.data.joinedRooms?.add(convo.id);
@@ -397,7 +405,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = client.data.user;
     if (!user) return;
     try {
-      const convo = await this.chatService.updateConversationTitle(
+      const convo = await this.conversations.updateConversationTitle(
         body.conversationId,
         user.id,
         body.title,
@@ -419,7 +427,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!user) return;
     if (!body?.conversationId) return;
     try {
-      await this.chatService.ensureParticipant(body.conversationId, user.id);
+      await this.participants.ensureParticipant(body.conversationId, user.id);
       // Broadcast aux autres participants uniquement (room broadcast sans l'émetteur)
       client.to(body.conversationId).emit(ChatEvents.TYPING_STARTED, {
         conversationId: body.conversationId,
@@ -440,7 +448,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!user) return;
     if (!body?.conversationId) return;
     try {
-      await this.chatService.ensureParticipant(body.conversationId, user.id);
+      await this.participants.ensureParticipant(body.conversationId, user.id);
       client.to(body.conversationId).emit(ChatEvents.TYPING_STOPPED, {
         conversationId: body.conversationId,
         userId: user.id,

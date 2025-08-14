@@ -13,7 +13,10 @@ import { ConversationSummary } from "./types";
 interface ChatContextValue {
   conversations: Record<string, ConversationSummary>;
   messages: Record<string, ChatMessage[]>;
-  meta: Record<string, { hasMore: boolean; loadingOlder: boolean }>;
+  meta: Record<
+    string,
+    { hasMore: boolean; loadingOlder: boolean; nextCursor?: string | null }
+  >;
   activeConversationId: string | null;
   setActiveConversation: (id: string | null) => void;
   setConversations: (convs: ConversationSummary[]) => void;
@@ -40,6 +43,10 @@ interface ChatContextValue {
   resetMessagePending: (id: string) => void;
   setHasMore: (conversationId: string, hasMore: boolean) => void;
   setLoadingOlder: (conversationId: string, loading: boolean) => void;
+  setNextCursor: (
+    conversationId: string,
+    cursor: string | null | undefined
+  ) => void;
   typing: Record<string, Record<string, number>>; // conversationId -> userId -> last activity epoch ms
   setTyping: (
     conversationId: string,
@@ -56,7 +63,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   >({});
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
   const [meta, setMeta] = useState<
-    Record<string, { hasMore: boolean; loadingOlder: boolean }>
+    Record<
+      string,
+      { hasMore: boolean; loadingOlder: boolean; nextCursor?: string | null }
+    >
   >({});
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
@@ -79,6 +89,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     (conversationId: string, msgs: ChatMessage[], prepend?: boolean) => {
       setMessages((prev) => {
         const existing = prev[conversationId] || [];
+        const prevEarliest = existing.length
+          ? existing[0].createdAt
+          : undefined;
         const map = new Map<string, ChatMessage>();
         if (prepend) {
           msgs.forEach((m) => map.set(m.id, m));
@@ -91,6 +104,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           (a, b) =>
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
+        // Cursor invalidation: if a newly inserted message is older than previous earliest, adjust nextCursor if necessary
+        const newEarliest = merged.length ? merged[0].createdAt : undefined;
+        if (
+          newEarliest &&
+          (!prevEarliest || new Date(newEarliest) < new Date(prevEarliest))
+        ) {
+          setMeta((prevMeta) => {
+            const metaEntry = prevMeta[conversationId] || {
+              hasMore: true,
+              loadingOlder: false,
+            };
+            const prevCursor = metaEntry.nextCursor;
+            if (!prevCursor || new Date(newEarliest) < new Date(prevCursor)) {
+              return {
+                ...prevMeta,
+                [conversationId]: { ...metaEntry, nextCursor: newEarliest },
+              };
+            }
+            return prevMeta;
+          });
+        }
         return { ...prev, [conversationId]: merged };
       });
     },
@@ -161,6 +195,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         [conversationId]: {
           ...(prev[conversationId] || { hasMore: true }),
           loadingOlder: loading,
+        },
+      }));
+    },
+    []
+  );
+
+  const setNextCursor = useCallback(
+    (conversationId: string, cursor: string | null | undefined) => {
+      setMeta((prev) => ({
+        ...prev,
+        [conversationId]: {
+          ...(prev[conversationId] || { hasMore: true, loadingOlder: false }),
+          nextCursor: cursor ?? null,
         },
       }));
     },
@@ -256,6 +303,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       resetMessagePending,
       setHasMore,
       setLoadingOlder,
+      setNextCursor,
       updateParticipantRead,
       typing: typingState,
       setTyping: (
@@ -291,6 +339,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       resetMessagePending,
       setHasMore,
       setLoadingOlder,
+      setNextCursor,
       updateParticipantRead,
       typingState,
     ]

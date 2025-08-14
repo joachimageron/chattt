@@ -14,7 +14,7 @@ export default function ChatPage() {
   const { user, isLoading } = useAuth();
   const {
     sendMessage,
-    loadMessages,
+    loadOlder,
     editMessage,
     deleteMessage,
     updateConversationTitle,
@@ -249,11 +249,7 @@ export default function ChatPage() {
               loadingOlder={currentMeta.loadingOlder}
               onLoadMoreTop={() => {
                 if (!activeConversationId) return;
-                if (currentMeta.loadingOlder || !currentMeta.hasMore) return;
-                const oldest = currentMessages[0];
-                if (!oldest) return;
-                chat.setLoadingOlder(activeConversationId, true);
-                loadMessages(activeConversationId, oldest.createdAt);
+                loadOlder(activeConversationId);
               }}
               onResend={(id) =>
                 activeConversationId && resendMessage(activeConversationId, id)

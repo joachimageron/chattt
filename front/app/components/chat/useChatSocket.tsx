@@ -95,6 +95,7 @@ export function useChatSocket() {
       conversationId: string;
       messages: ChatMessage[];
       hasMore: boolean;
+      nextCursor?: string | null;
       direction?: "initial" | "older";
     }) => {
       console.log(
@@ -105,6 +106,7 @@ export function useChatSocket() {
       const isPrepend = payload.direction === "older";
       chat.upsertMessages(payload.conversationId, payload.messages, isPrepend);
       chat.setHasMore(payload.conversationId, payload.hasMore);
+      chat.setNextCursor(payload.conversationId, payload.nextCursor);
       chat.setLoadingOlder(payload.conversationId, false);
       // Marquer comme deliverés tous les messages reçus (non envoyés par nous) encore en status SENT
       const toDeliver = payload.messages
@@ -315,6 +317,16 @@ export function useChatSocket() {
     []
   );
 
+  const loadOlder = useCallback(
+    (conversationId: string) => {
+      const meta = chat.meta[conversationId];
+      if (!meta || !meta.hasMore || meta.loadingOlder) return;
+      chat.setLoadingOlder(conversationId, true);
+      loadMessages(conversationId, meta.nextCursor || undefined);
+    },
+    [chat, loadMessages]
+  );
+
   const joinConversation = useCallback((conversationId: string) => {
     if (!socketRef.current) return;
     socketRef.current.emit(ChatEvents.ROOM_JOIN, { conversationId });
@@ -409,6 +421,7 @@ export function useChatSocket() {
   return {
     sendMessage,
     loadMessages,
+    loadOlder,
     joinConversation,
     createConversation,
     editMessage,
