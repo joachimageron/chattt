@@ -189,6 +189,46 @@ export function useChatSocket() {
       }
     );
     socket.on(ChatEvents.MESSAGE_ERROR, onMessageError);
+    type ReactionPayload = {
+      id: string;
+      messageId: string;
+      userId: string;
+      emoji: string;
+      createdAt: string;
+    };
+    socket.on(
+      ChatEvents.REACTION_ADDED,
+      (p: { messageId: string; reactions: ReactionPayload[] }) => {
+        // Find conversation containing message (prefer active)
+        let convId = chat.activeConversationId;
+        if (!convId) {
+          for (const [cid, list] of Object.entries(chat.messages)) {
+            if (list.some((m) => m.id === p.messageId)) {
+              convId = cid;
+              break;
+            }
+          }
+        }
+        if (convId)
+          chat.updateMessageReactions(convId, p.messageId, p.reactions);
+      }
+    );
+    socket.on(
+      ChatEvents.REACTION_REMOVED,
+      (p: { messageId: string; reactions: ReactionPayload[] }) => {
+        let convId = chat.activeConversationId;
+        if (!convId) {
+          for (const [cid, list] of Object.entries(chat.messages)) {
+            if (list.some((m) => m.id === p.messageId)) {
+              convId = cid;
+              break;
+            }
+          }
+        }
+        if (convId)
+          chat.updateMessageReactions(convId, p.messageId, p.reactions);
+      }
+    );
     socket.on(
       ChatEvents.PARTICIPANT_READ,
       (p: { conversationId: string; userId: string; lastReadAt?: string }) => {
@@ -223,6 +263,8 @@ export function useChatSocket() {
       socket.off(ChatEvents.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off(ChatEvents.MESSAGE_LIST, onMessageList);
       socket.off(ChatEvents.MESSAGE_ERROR, onMessageError);
+      socket.off(ChatEvents.REACTION_ADDED);
+      socket.off(ChatEvents.REACTION_REMOVED);
       socket.off(ChatEvents.PARTICIPANT_READ);
       socket.off(ChatEvents.MESSAGE_DELIVERED);
       socket.off(ChatEvents.MESSAGE_READ);
@@ -372,6 +414,26 @@ export function useChatSocket() {
     editMessage,
     deleteMessage,
     updateConversationTitle,
+    addReaction: (conversationId: string, messageId: string, emoji: string) => {
+      if (!socketRef.current) return;
+      socketRef.current.emit(ChatEvents.REACTION_ADD, {
+        conversationId,
+        messageId,
+        emoji,
+      });
+    },
+    removeReaction: (
+      conversationId: string,
+      messageId: string,
+      emoji: string
+    ) => {
+      if (!socketRef.current) return;
+      socketRef.current.emit(ChatEvents.REACTION_REMOVE, {
+        conversationId,
+        messageId,
+        emoji,
+      });
+    },
     resendMessage: (conversationId: string, tempId: string) => {
       const list = chat.messages[conversationId] || [];
       const msg = list.find((m) => m.id === tempId);

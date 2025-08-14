@@ -30,6 +30,13 @@ export interface ChatMessage {
   createdAt: string;
   updatedAt?: string;
   sender?: { id: string; email: string; name?: string | null };
+  reactions?: {
+    id: string;
+    messageId: string;
+    userId: string;
+    emoji: string;
+    createdAt: string;
+  }[];
   // Client-only flags for optimistic & error states
   _optimistic?: boolean;
   _error?: string;

@@ -4,13 +4,15 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Message, MessageType, MessageStatus } from './entities/message.entity';
 import { Conversation, ConversationType } from './entities/conversation.entity';
 import { ConversationParticipant } from './entities/conversationParticipant.entity';
+import { MessageReaction } from './entities/messageReaction.entity';
 import { SendMessageInput } from './dto/send-message.input';
 import { User } from '../users/entities/user.entity';
 import { CreateConversationInput } from './dto/create-conversation.input';
+import { CHAT_CONSTANTS } from './chat.constants';
 
 @Injectable()
 export class ChatService {
@@ -21,6 +23,8 @@ export class ChatService {
     private readonly convoRepo: Repository<Conversation>,
     @InjectRepository(ConversationParticipant)
     private readonly participantRepo: Repository<ConversationParticipant>,
+    @InjectRepository(MessageReaction)
+    private readonly reactionRepo: Repository<MessageReaction>,
   ) {}
 
   async ensureParticipant(
@@ -36,12 +40,59 @@ export class ChatService {
     return participant;
   }
 
+  async addReaction(
+    messageId: string,
+    conversationId: string,
+    user: User,
+    emoji: string,
+  ): Promise<MessageReaction[]> {
+    await this.ensureParticipant(conversationId, user.id);
+    const message = await this.messageRepo.findOne({
+      where: { id: messageId },
+    });
+    if (!message) throw new NotFoundException('Message not found');
+    if (message.conversationId !== conversationId)
+      throw new ForbiddenException('Message not in conversation');
+    const sanitizedEmoji = emoji
+      .trim()
+      .slice(0, CHAT_CONSTANTS.REACTION.EMOJI_MAX_LENGTH);
+    if (!sanitizedEmoji) throw new ForbiddenException('Emoji vide');
+    // True upsert leveraging unique constraint (messageId,userId,emoji)
+    await this.reactionRepo
+      .createQueryBuilder()
+      .insert()
+      .into(MessageReaction)
+      .values({ messageId, userId: user.id, emoji: sanitizedEmoji })
+      .orIgnore()
+      .execute();
+    return this.reactionRepo.find({
+      where: { messageId },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async removeReaction(
+    messageId: string,
+    conversationId: string,
+    user: User,
+    emoji: string,
+  ): Promise<MessageReaction[]> {
+    await this.ensureParticipant(conversationId, user.id);
+    await this.reactionRepo.delete({
+      messageId,
+      userId: user.id,
+      emoji: emoji.trim().slice(0, 32),
+    });
+    return this.reactionRepo.find({
+      where: { messageId },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
   async sendMessage(input: SendMessageInput, sender: User): Promise<Message> {
     await this.ensureParticipant(input.conversationId, sender.id);
 
-    // Simple length limit to prevent abuse (can be externalized to config)
-    const MAX_LEN = 4000;
-    if (input.content.length > MAX_LEN) {
+    if (input.content.length > CHAT_CONSTANTS.MESSAGE.MAX_LENGTH) {
       throw new ForbiddenException('Message too long');
     }
 
@@ -70,14 +121,31 @@ export class ChatService {
     limit = 30,
     before?: Date,
   ): Promise<Message[]> {
-    return this.messageRepo.find({
-      where: {
-        conversationId,
-        ...(before ? { createdAt: LessThan(before) } : {}),
-      },
-      order: { createdAt: 'DESC' },
-      take: limit,
+    const qb = this.messageRepo
+      .createQueryBuilder('m')
+      .leftJoinAndSelect('m.sender', 's')
+      .where('m.conversationId = :conversationId', { conversationId });
+    if (before) qb.andWhere('m.createdAt < :before', { before });
+    const messages = await qb
+      .orderBy('m.createdAt', 'DESC')
+      .take(limit)
+      .getMany();
+    if (!messages.length) return messages;
+    const ids = messages.map((m) => m.id);
+    const reactions = await this.reactionRepo.find({
+      where: ids.map((id) => ({ messageId: id })),
     });
+    const map: Record<string, MessageReaction[]> = {};
+    reactions.forEach((r) => {
+      if (!map[r.messageId]) map[r.messageId] = [];
+      map[r.messageId].push(r);
+    });
+    (messages as (Message & { reactions?: MessageReaction[] })[]).forEach(
+      (m) => {
+        m['reactions'] = map[m.id] || [];
+      },
+    );
+    return messages;
   }
 
   async markRead(conversationId: string, userId: string): Promise<void> {
@@ -137,7 +205,7 @@ export class ChatService {
       throw new ForbiddenException('Cannot edit this message');
     if (message.isDeleted) throw new ForbiddenException('Message deleted');
     // Enforce 15-minute edit window
-    const EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+    const EDIT_WINDOW_MS = CHAT_CONSTANTS.MESSAGE.EDIT_WINDOW_MS;
     const now = Date.now();
     const created = message.createdAt?.getTime?.() ?? 0;
     if (now - created > EDIT_WINDOW_MS) {
@@ -158,7 +226,7 @@ export class ChatService {
     if (!message) throw new NotFoundException('Message not found');
     if (message.senderId !== userId)
       throw new ForbiddenException('Cannot delete this message');
-    const DELETE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+    const DELETE_WINDOW_MS = CHAT_CONSTANTS.MESSAGE.DELETE_WINDOW_MS;
     const now = Date.now();
     const created = message.createdAt?.getTime?.() ?? 0;
     if (now - created > DELETE_WINDOW_MS) {

@@ -12,6 +12,9 @@ import {
   PopoverContent,
 } from "@heroui/react";
 import { useAuth } from "../providers/AuthProvider";
+import { getSocket } from "./socketClient";
+import { ChatEvents } from "./events";
+import { MessageReactions } from "./MessageReactions";
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -36,6 +39,37 @@ export function MessageItem({
 }: MessageItemProps) {
   const { user } = useAuth();
   const isMine = user?.id === message.senderId;
+
+  const conversationId = message.conversationId;
+  const myUserId = user?.id;
+  const reactionsAggregated = useMemo(() => {
+    const agg: Record<
+      string,
+      { emoji: string; count: number; mine: boolean; users: string[] }
+    > = {};
+    (message.reactions || []).forEach((r) => {
+      if (!agg[r.emoji])
+        agg[r.emoji] = { emoji: r.emoji, count: 0, mine: false, users: [] };
+      agg[r.emoji].count += 1;
+      agg[r.emoji].users.push(r.userId);
+      if (r.userId === myUserId) agg[r.emoji].mine = true;
+    });
+    return Object.values(agg).sort(
+      (a, b) => b.count - a.count || a.emoji.localeCompare(b.emoji)
+    );
+  }, [message.reactions, myUserId]);
+
+  const toggleReaction = (emoji: string) => {
+    const mine = reactionsAggregated.find((r) => r.emoji === emoji)?.mine;
+    const socket = getSocket();
+    socket.emit(mine ? ChatEvents.REACTION_REMOVE : ChatEvents.REACTION_ADD, {
+      conversationId,
+      messageId: message.id,
+      emoji,
+    });
+  };
+
+  const quickEmojis = ["👍", "❤️", "😂", "🔥", "😮", "😢", "👏", "✅"]; // simple set
 
   const timeLabel = useMemo(() => {
     try {
@@ -72,17 +106,20 @@ export function MessageItem({
         )}
       </span>
     );
-  }, [message, onResend]);
+  }, [
+    message.isDeleted,
+    message.content,
+    message._optimistic,
+    message._error,
+    message.id,
+    onResend,
+  ]);
 
-  const { canEdit, canDelete } = useMemo(() => {
-    const res = { canEdit: false, canDelete: false };
-    if (!isMine || message.isDeleted) return res;
+  const canEditDelete = useMemo(() => {
     const created = new Date(message.createdAt).getTime();
     const within = Date.now() - created <= 15 * 60 * 1000;
-    res.canEdit = within;
-    res.canDelete = within;
-    return res;
-  }, [isMine, message]);
+    return isMine && !message.isDeleted && within;
+  }, [isMine, message.createdAt, message.isDeleted]);
 
   const statusPopover = showStatus ? (
     <Popover placement="top" showArrow>
@@ -121,7 +158,6 @@ export function MessageItem({
         isMine ? "justify-end" : "justify-start"
       } ${compactAbove ? "-mt-2" : ""}`}
     >
-      {/* Incoming: avatar or spacer to keep left alignment */}
       {!isMine &&
         (showAvatar ? (
           <Avatar
@@ -149,6 +185,10 @@ export function MessageItem({
                       (édité)
                     </span>
                   )}
+                  <MessageReactions
+                    aggregates={reactionsAggregated}
+                    onToggle={toggleReaction}
+                  />
                 </div>
               </DropdownTrigger>
               {!message.isDeleted && (
@@ -157,11 +197,42 @@ export function MessageItem({
                   variant="flat"
                   disabledKeys={(() => {
                     const d: string[] = [];
-                    if (!canEdit) d.push("edit");
-                    if (!canDelete) d.push("delete");
+                    if (!canEditDelete) d.push("edit", "delete");
                     return d;
                   })()}
                 >
+                  <DropdownItem
+                    key="reactions"
+                    isReadOnly
+                    className="cursor-default opacity-100 !py-2 !px-2"
+                    textValue="Réactions"
+                  >
+                    <div className="flex flex-wrap gap-1">
+                      {quickEmojis.map((e) => {
+                        const mine = reactionsAggregated.find(
+                          (r) => r.emoji === e
+                        )?.mine;
+                        return (
+                          <button
+                            key={e}
+                            type="button"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              toggleReaction(e);
+                            }}
+                            className={`w-8 h-8 text-lg flex items-center justify-center rounded-medium border transition-colors hover:bg-content3 ${
+                              mine
+                                ? "bg-primary-500/20 border-primary-400"
+                                : "bg-content2 border-default-300"
+                            }`}
+                            title={mine ? "Retirer" : "Ajouter"}
+                          >
+                            {e}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </DropdownItem>
                   <DropdownItem key="edit" onPress={() => onEdit?.(message.id)}>
                     Éditer
                   </DropdownItem>
@@ -176,7 +247,6 @@ export function MessageItem({
                 </DropdownMenu>
               )}
             </Dropdown>
-            {/* Outgoing: keep right edge alignment by reserving space when avatar hidden */}
             {showAvatar ? (
               <Avatar
                 size="sm"
@@ -201,16 +271,54 @@ export function MessageItem({
         </div>
       ) : (
         <div className="flex flex-col mt-1">
-          <div
-            className={`max-w-xs rounded-medium px-3 py-2 text-sm bg-content2 shadow-sm border border-transparent ${
-              message.isDeleted ? "bg-transparent" : ""
-            } ${compactAbove ? "rounded-tl-sm" : ""}`}
-          >
-            {content}
-            {!message.isDeleted && message.editedAt && (
-              <span className="ml-2 text-[10px] text-default-400">(édité)</span>
-            )}
-          </div>
+          <Popover placement="top" showArrow>
+            <PopoverTrigger>
+              <div
+                className={`max-w-xs rounded-medium px-3 py-2 text-sm bg-content2 shadow-sm border border-transparent cursor-pointer hover:bg-content3 ${
+                  message.isDeleted
+                    ? "bg-transparent cursor-default hover:bg-transparent"
+                    : ""
+                } ${compactAbove ? "rounded-tl-sm" : ""}`}
+              >
+                {content}
+                {!message.isDeleted && message.editedAt && (
+                  <span className="ml-2 text-[10px] text-default-400">
+                    (édité)
+                  </span>
+                )}
+                <MessageReactions
+                  aggregates={reactionsAggregated}
+                  onToggle={toggleReaction}
+                  small
+                />
+              </div>
+            </PopoverTrigger>
+            <PopoverContent className="p-2 flex flex-row gap-1">
+              {quickEmojis.map((e) => {
+                const mine = reactionsAggregated.find(
+                  (r) => r.emoji === e
+                )?.mine;
+                return (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      toggleReaction(e);
+                    }}
+                    className={`w-8 h-8 text-lg flex items-center justify-center rounded-medium border transition-colors hover:bg-content3 ${
+                      mine
+                        ? "bg-primary-500/20 border-primary-400"
+                        : "bg-content2 border-default-300"
+                    }`}
+                    title={mine ? "Retirer" : "Ajouter"}
+                  >
+                    {e}
+                  </button>
+                );
+              })}
+            </PopoverContent>
+          </Popover>
           {showTimestamp && (
             <div
               className="mt-auto ml-1 self-start text-[11px] text-default-400 select-none"

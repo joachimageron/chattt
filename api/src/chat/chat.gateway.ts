@@ -284,6 +284,66 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @SubscribeMessage(ChatEvents.REACTION_ADD)
+  async handleReactionAdd(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody()
+    body: { messageId: string; conversationId: string; emoji: string },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    try {
+      const reactions = await this.chatService.addReaction(
+        body.messageId,
+        body.conversationId,
+        user,
+        body.emoji,
+      );
+      this.server.to(body.conversationId).emit(ChatEvents.REACTION_ADDED, {
+        messageId: body.messageId,
+        reactions: reactions.map((r) => ({
+          id: r.id,
+          messageId: r.messageId,
+          userId: r.userId,
+          emoji: r.emoji,
+          createdAt: r.createdAt,
+        })),
+      });
+    } catch (e) {
+      client.emit(ChatEvents.MESSAGE_ERROR, { error: (e as Error).message });
+    }
+  }
+
+  @SubscribeMessage(ChatEvents.REACTION_REMOVE)
+  async handleReactionRemove(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody()
+    body: { messageId: string; conversationId: string; emoji: string },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    try {
+      const reactions = await this.chatService.removeReaction(
+        body.messageId,
+        body.conversationId,
+        user,
+        body.emoji,
+      );
+      this.server.to(body.conversationId).emit(ChatEvents.REACTION_REMOVED, {
+        messageId: body.messageId,
+        reactions: reactions.map((r) => ({
+          id: r.id,
+          messageId: r.messageId,
+          userId: r.userId,
+          emoji: r.emoji,
+          createdAt: r.createdAt,
+        })),
+      });
+    } catch (e) {
+      client.emit(ChatEvents.MESSAGE_ERROR, { error: (e as Error).message });
+    }
+  }
+
   @SubscribeMessage(ChatEvents.CONVERSATION_LIST)
   async handleListConversations(@ConnectedSocket() client: AuthedSocket) {
     const user = client.data.user;

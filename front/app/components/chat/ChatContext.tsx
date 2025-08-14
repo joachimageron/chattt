@@ -29,6 +29,11 @@ interface ChatContextValue {
     prepend?: boolean
   ) => void;
   updateMessage: (msg: ChatMessage) => void;
+  updateMessageReactions: (
+    conversationId: string,
+    messageId: string,
+    reactions: ChatMessage["reactions"]
+  ) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   confirmMessage: (tempId: string, real: ChatMessage) => void;
   markMessageError: (tempId: string, error: string) => void;
@@ -174,6 +179,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const updateMessageReactions = useCallback(
+    (
+      conversationId: string,
+      messageId: string,
+      reactions: ChatMessage["reactions"]
+    ) => {
+      setMessages((prev) => {
+        const list = prev[conversationId] || [];
+        return {
+          ...prev,
+          [conversationId]: list.map((m) =>
+            m.id === messageId ? { ...m, reactions } : m
+          ),
+        };
+      });
+    },
+    []
+  );
+
   const deleteMessage = useCallback(
     (conversationId: string, messageId: string) => {
       setMessages((prev) => {
@@ -225,6 +249,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       upsertConversation,
       upsertMessages,
       updateMessage,
+      updateMessageReactions,
       deleteMessage,
       confirmMessage,
       markMessageError,
@@ -259,6 +284,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       upsertConversation,
       upsertMessages,
       updateMessage,
+      updateMessageReactions,
       deleteMessage,
       confirmMessage,
       markMessageError,

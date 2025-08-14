@@ -19,7 +19,6 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column()
   @MinLength(6)
   @Column({ select: false })
   password: string;
