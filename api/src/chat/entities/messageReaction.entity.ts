@@ -17,6 +17,8 @@ import { User } from '../../users/entities/user.entity';
 @Unique(['messageId', 'userId', 'emoji'])
 @Index(['messageId'])
 @Index(['userId'])
+// Optimise ordered fetch per message (add/remove operations re-fetch sorted list)
+@Index(['messageId', 'createdAt'])
 export class MessageReaction {
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')

@@ -16,6 +16,10 @@ import { User } from '../../users/entities/user.entity';
 @Entity('conversation_participants')
 @Unique(['conversationId', 'userId'])
 @Index(['userId'])
+// Efficient lookup for participants by conversation and user
+@Index(['conversationId', 'userId'])
+// Allow ordered queries per conversation (e.g. lastReadAt updates, listing participants)
+@Index(['conversationId', 'createdAt'])
 export class ConversationParticipant {
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')

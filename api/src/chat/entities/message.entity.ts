@@ -30,6 +30,10 @@ registerEnumType(MessageStatus, { name: 'MessageStatus' });
 @Entity('messages')
 @Index(['conversationId', 'createdAt'])
 @Index(['senderId', 'createdAt'])
+// Support queries filtering by conversation and status (e.g., marking delivered/read in batches)
+@Index(['conversationId', 'status'])
+// Support fetching edited/deleted changes if needed per conversation
+@Index(['conversationId', 'updatedAt'])
 export class Message {
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')

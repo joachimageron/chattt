@@ -4,7 +4,7 @@ import { ChatEvents } from '../events';
 import { MessageService } from '../services/message.service';
 import { ParticipantService } from '../services/participant.service';
 import { ReactionService } from '../services/reaction.service';
-import { sanitizeMessage } from '../sanitize';
+import { sanitizeMessage, mapReaction } from '../sanitize';
 import { SendMessageInput } from '../dto/send-message.input';
 import { LoadMessagesInput } from '../dto/load-messages.input';
 import { MarkDeliveredInput } from '../dto/mark-delivered.input';
@@ -180,13 +180,7 @@ export class MessageHandler {
       );
       server.to(body.conversationId).emit(ChatEvents.REACTION_ADDED, {
         messageId: body.messageId,
-        reactions: reactions.map((r) => ({
-          id: r.id,
-          messageId: r.messageId,
-          userId: r.userId,
-          emoji: r.emoji,
-          createdAt: r.createdAt,
-        })),
+        reactions: reactions.map(mapReaction),
       });
     });
   }
@@ -207,13 +201,7 @@ export class MessageHandler {
       );
       server.to(body.conversationId).emit(ChatEvents.REACTION_REMOVED, {
         messageId: body.messageId,
-        reactions: reactions.map((r) => ({
-          id: r.id,
-          messageId: r.messageId,
-          userId: r.userId,
-          emoji: r.emoji,
-          createdAt: r.createdAt,
-        })),
+        reactions: reactions.map(mapReaction),
       });
     });
   }

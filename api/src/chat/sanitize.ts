@@ -19,6 +19,17 @@ export function sanitizeUser(user?: User | null) {
   return { id, email, name, createdAt };
 }
 
+export function mapReaction(r: MessageReaction & { user?: User | null }) {
+  return {
+    id: r.id,
+    messageId: r.messageId,
+    userId: r.userId,
+    emoji: r.emoji,
+    createdAt: r.createdAt,
+    user: sanitizeUser(r.user),
+  };
+}
+
 export function sanitizeMessage(message: MessageWithOptionals) {
   const reactions = message.reactions ?? [];
   return {
@@ -35,14 +46,7 @@ export function sanitizeMessage(message: MessageWithOptionals) {
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
     sender: sanitizeUser(message.sender),
-    reactions: reactions.map((r) => ({
-      id: r.id,
-      messageId: r.messageId,
-      userId: r.userId,
-      emoji: r.emoji,
-      createdAt: r.createdAt,
-      user: sanitizeUser(r.user),
-    })),
+    reactions: reactions.map(mapReaction),
   };
 }
 
