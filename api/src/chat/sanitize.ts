@@ -1,5 +1,5 @@
 import { Conversation } from './entities/conversation.entity';
-import { ConversationParticipant } from './entities/conversationParticipant.entity';
+import { ConversationParticipant } from './entities/conversation-participant.entity';
 import { Message } from './entities/message.entity';
 import { MessageReaction } from './entities/messageReaction.entity';
 import { User } from '../users/entities/user.entity';

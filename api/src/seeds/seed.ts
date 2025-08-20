@@ -23,7 +23,7 @@ import {
   Conversation,
   ConversationType,
 } from '../chat/entities/conversation.entity';
-import { ConversationParticipant } from '../chat/entities/conversationParticipant.entity';
+import { ConversationParticipant } from '../chat/entities/conversation-participant.entity';
 import {
   Message,
   MessageStatus,

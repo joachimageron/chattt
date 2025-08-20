@@ -7,7 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Message, MessageType, MessageStatus } from './entities/message.entity';
 import { Conversation, ConversationType } from './entities/conversation.entity';
-import { ConversationParticipant } from './entities/conversationParticipant.entity';
+import { ConversationParticipant } from './entities/conversation-participant.entity';
 import { MessageReaction } from './entities/messageReaction.entity';
 import { SendMessageInput } from './dto/send-message.input';
 import { User } from '../users/entities/user.entity';

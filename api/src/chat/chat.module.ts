@@ -7,7 +7,7 @@ import { ConversationService } from './services/conversation.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Message } from './entities/message.entity';
 import { Conversation } from './entities/conversation.entity';
-import { ConversationParticipant } from './entities/conversationParticipant.entity';
+import { ConversationParticipant } from './entities/conversation-participant.entity';
 import { MessageReaction } from './entities/messageReaction.entity';
 import { ChatFlowService } from './services/chat-flow.service';
 import { MessageHandler } from './handlers/message.handler';

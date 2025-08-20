@@ -9,7 +9,7 @@ import {
   Index,
 } from 'typeorm';
 import { Message } from './message.entity';
-import { ConversationParticipant } from './conversationParticipant.entity';
+import { ConversationParticipant } from './conversation-participant.entity';
 
 export enum ConversationType {
   DIRECT = 'DIRECT',

@@ -9,7 +9,7 @@ import {
   Conversation,
   ConversationType,
 } from '../entities/conversation.entity';
-import { ConversationParticipant } from '../entities/conversationParticipant.entity';
+import { ConversationParticipant } from '../entities/conversation-participant.entity';
 import { CreateConversationInput } from '../dto/create-conversation.input';
 import { ParticipantService } from './participant.service';
 

@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ConversationParticipant } from '../entities/conversationParticipant.entity';
+import { ConversationParticipant } from '../entities/conversation-participant.entity';
 
 @Injectable()
 export class ParticipantService {
