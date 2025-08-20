@@ -14,6 +14,7 @@ import {
 import { useAuth } from "../providers/AuthProvider";
 import { getSocket } from "./socketClient";
 import { ChatEvents } from "./events";
+import { aggregateReactions, canEditMessage } from "./utils";
 import { MessageReactions } from "./MessageReactions";
 
 interface MessageItemProps {
@@ -42,22 +43,10 @@ export function MessageItem({
 
   const conversationId = message.conversationId;
   const myUserId = user?.id;
-  const reactionsAggregated = useMemo(() => {
-    const agg: Record<
-      string,
-      { emoji: string; count: number; mine: boolean; users: string[] }
-    > = {};
-    (message.reactions || []).forEach((r) => {
-      if (!agg[r.emoji])
-        agg[r.emoji] = { emoji: r.emoji, count: 0, mine: false, users: [] };
-      agg[r.emoji].count += 1;
-      agg[r.emoji].users.push(r.userId);
-      if (r.userId === myUserId) agg[r.emoji].mine = true;
-    });
-    return Object.values(agg).sort(
-      (a, b) => b.count - a.count || a.emoji.localeCompare(b.emoji)
-    );
-  }, [message.reactions, myUserId]);
+  const reactionsAggregated = useMemo(
+    () => aggregateReactions(message.reactions, myUserId),
+    [message.reactions, myUserId]
+  );
 
   const toggleReaction = (emoji: string) => {
     const mine = reactionsAggregated.find((r) => r.emoji === emoji)?.mine;
@@ -115,11 +104,10 @@ export function MessageItem({
     onResend,
   ]);
 
-  const canEditDelete = useMemo(() => {
-    const created = new Date(message.createdAt).getTime();
-    const within = Date.now() - created <= 15 * 60 * 1000;
-    return isMine && !message.isDeleted && within;
-  }, [isMine, message.createdAt, message.isDeleted]);
+  const canEditDelete = useMemo(
+    () => canEditMessage(message, user?.id),
+    [message, user?.id]
+  );
 
   const statusPopover = showStatus ? (
     <Popover placement="top" showArrow>

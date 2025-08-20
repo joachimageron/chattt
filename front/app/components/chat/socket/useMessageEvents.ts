@@ -25,9 +25,11 @@ export function useMessageEvents(enabled: boolean) {
     (payload) => {
       const isPrepend = payload.direction === "older";
       chat.upsertMessages(payload.conversationId, payload.messages, isPrepend);
-      chat.setHasMore(payload.conversationId, payload.hasMore);
-      chat.setNextCursor(payload.conversationId, payload.nextCursor);
-      chat.setLoadingOlder(payload.conversationId, false);
+      chat.updateMeta(payload.conversationId, {
+        hasMore: payload.hasMore,
+        nextCursor: payload.nextCursor ?? null,
+        loadingOlder: false,
+      });
       // Deliver messages not authored by us
       const toDeliver = payload.messages
         .filter(
@@ -187,7 +189,7 @@ export function useMessageEvents(enabled: boolean) {
     (conversationId: string) => {
       const meta = chat.meta[conversationId];
       if (!meta || !meta.hasMore || meta.loadingOlder) return;
-      chat.setLoadingOlder(conversationId, true);
+      chat.updateMeta(conversationId, { loadingOlder: true });
       loadMessages(conversationId, meta.nextCursor || undefined);
     },
     [chat, loadMessages]

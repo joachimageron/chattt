@@ -60,6 +60,14 @@ interface ChatContextValue {
     conversationId: string,
     cursor: string | null | undefined
   ) => void;
+  updateMeta: (
+    conversationId: string,
+    patch: Partial<{
+      hasMore: boolean;
+      loadingOlder: boolean;
+      nextCursor?: string | null;
+    }>
+  ) => void;
   typing: Record<string, Record<string, number>>; // conversationId -> userId -> last activity epoch ms
   setTyping: (
     conversationId: string,
@@ -161,23 +169,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     (id: string) => dispatch({ type: "RESET_MESSAGE_PENDING", id }),
     []
   );
-  const setHasMore = useCallback(
-    (conversationId: string, hasMore: boolean) =>
-      dispatch({ type: "SET_HAS_MORE", conversationId, hasMore }),
-    []
-  );
-  const setLoadingOlder = useCallback(
-    (conversationId: string, loading: boolean) =>
-      dispatch({
-        type: "SET_LOADING_OLDER",
-        conversationId,
-        loadingOlder: loading,
-      }),
-    []
-  );
-  const setNextCursor = useCallback(
-    (conversationId: string, cursor: string | null | undefined) =>
-      dispatch({ type: "SET_NEXT_CURSOR", conversationId, cursor }),
+  const setHasMore = useCallback(() => {
+    throw new Error("setHasMore removed – use updateMeta");
+  }, []);
+  const setLoadingOlder = useCallback(() => {
+    throw new Error("setLoadingOlder removed – use updateMeta");
+  }, []);
+  const setNextCursor = useCallback(() => {
+    throw new Error("setNextCursor removed – use updateMeta");
+  }, []);
+  const updateMeta = useCallback(
+    (
+      conversationId: string,
+      patch: Partial<{
+        hasMore: boolean;
+        loadingOlder: boolean;
+        nextCursor?: string | null;
+      }>
+    ) => dispatch({ type: "UPDATE_META", conversationId, patch }),
     []
   );
   const updateParticipantRead = useCallback(
@@ -226,6 +235,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       updateParticipantRead,
       typing: state.typing,
       setTyping,
+      updateMeta,
     }),
     [
       state,
@@ -246,6 +256,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setNextCursor,
       updateParticipantRead,
       setTyping,
+      updateMeta,
     ]
   );
 

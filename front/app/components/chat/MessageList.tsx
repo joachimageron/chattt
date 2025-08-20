@@ -9,6 +9,7 @@ import React, {
 import { ScrollShadow, Spinner, Avatar, Tooltip } from "@heroui/react";
 import { ChatMessage } from "./socketClient";
 import { MessageItem } from "./MessageItem";
+import { dayLabelFR } from "./utils";
 import { useAuth } from "../providers/AuthProvider";
 import { useChat } from "./ChatContext";
 
@@ -192,18 +193,8 @@ export function MessageList({
     return () => obs.disconnect();
   }, [onLoadMoreTop, hasMore]);
 
-  // Utilitaire format date relative (Aujourd'hui / Hier / date locale)
-  const dayLabel = (d: Date) => {
-    const today = new Date();
-    const yday = new Date(Date.now() - 86400000);
-    const sameDay = (a: Date, b: Date) =>
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
-    if (sameDay(d, today)) return "Aujourd'hui";
-    if (sameDay(d, yday)) return "Hier";
-    return d.toLocaleDateString();
-  };
+  // Day label externalisé (FR)
+  const dayLabel = dayLabelFR;
 
   return (
     <ScrollShadow

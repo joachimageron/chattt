@@ -35,18 +35,17 @@ export type ChatAction =
       messages: ChatMessage[];
       prepend?: boolean;
     }
+  // Meta (pagination) unified
+  | {
+      type: "UPDATE_META";
+      conversationId: string;
+      patch: Partial<ChatMetaEntry>;
+    }
   | { type: "CONFIRM_MESSAGE"; tempId: string; message: ChatMessage }
   | { type: "MARK_MESSAGE_ERROR"; tempId: string; error: string }
   | { type: "RESET_MESSAGE_PENDING"; id: string }
   | { type: "UPDATE_MESSAGE"; message: ChatMessage }
   | { type: "DELETE_MESSAGE"; conversationId: string; messageId: string }
-  | { type: "SET_HAS_MORE"; conversationId: string; hasMore: boolean }
-  | { type: "SET_LOADING_OLDER"; conversationId: string; loadingOlder: boolean }
-  | {
-      type: "SET_NEXT_CURSOR";
-      conversationId: string;
-      cursor: string | null | undefined;
-    }
   | {
       type: "UPDATE_PARTICIPANT_READ";
       conversationId: string;
@@ -155,6 +154,21 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         meta,
       };
     }
+    case "UPDATE_META": {
+      const { conversationId, patch } = action;
+      const existing = state.meta[conversationId] || {
+        hasMore: true,
+        loadingOlder: false,
+        nextCursor: undefined,
+      };
+      return {
+        ...state,
+        meta: {
+          ...state.meta,
+          [conversationId]: { ...existing, ...patch },
+        },
+      };
+    }
     case "CONFIRM_MESSAGE": {
       const { tempId, message } = action;
       const list = state.messages[message.conversationId] || [];
@@ -176,13 +190,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
     case "MARK_MESSAGE_ERROR": {
       const { tempId, error } = action;
-      const messageToConversation = { ...state.messageToConversation };
-      // scan minimal (using index if exists)
-      const convId =
-        messageToConversation[tempId] ||
-        Object.entries(state.messages).find(([, list]) =>
-          list.some((m) => m.id === tempId)
-        )?.[0];
+      const convId = state.messageToConversation[tempId];
       if (!convId) return state;
       const newList = state.messages[convId].map((m) =>
         m.id === tempId ? { ...m, _error: error, _optimistic: true } : m
@@ -191,11 +199,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
     case "RESET_MESSAGE_PENDING": {
       const { id } = action;
-      const convId =
-        state.messageToConversation[id] ||
-        Object.entries(state.messages).find(([, list]) =>
-          list.some((m) => m.id === id)
-        )?.[0];
+      const convId = state.messageToConversation[id];
       if (!convId) return state;
       const newList = state.messages[convId].map((m) =>
         m.id === id ? { ...m, _error: undefined } : m
@@ -225,48 +229,6 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           [conversationId]: list.map((m) =>
             m.id === messageId ? { ...m, isDeleted: true, content: "" } : m
           ),
-        },
-      };
-    }
-    case "SET_HAS_MORE": {
-      const { conversationId, hasMore } = action;
-      const entry = state.meta[conversationId] || {
-        loadingOlder: false,
-        hasMore: true,
-      };
-      return {
-        ...state,
-        meta: {
-          ...state.meta,
-          [conversationId]: { ...entry, hasMore },
-        },
-      };
-    }
-    case "SET_LOADING_OLDER": {
-      const { conversationId, loadingOlder } = action;
-      const entry = state.meta[conversationId] || {
-        hasMore: true,
-        loadingOlder: false,
-      };
-      return {
-        ...state,
-        meta: {
-          ...state.meta,
-          [conversationId]: { ...entry, loadingOlder },
-        },
-      };
-    }
-    case "SET_NEXT_CURSOR": {
-      const { conversationId, cursor } = action;
-      const entry = state.meta[conversationId] || {
-        hasMore: true,
-        loadingOlder: false,
-      };
-      return {
-        ...state,
-        meta: {
-          ...state.meta,
-          [conversationId]: { ...entry, nextCursor: cursor ?? null },
         },
       };
     }
