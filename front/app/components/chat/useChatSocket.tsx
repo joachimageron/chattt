@@ -1,516 +1,91 @@
 "use client";
-import { useEffect, useRef, useCallback } from "react";
-import { addToast } from "@heroui/react";
-import { getSocket, ChatMessage } from "./socketClient";
-import { ChatEvents } from "./events";
-import { MessageStatus, MessageType, ConversationSummary } from "./types";
+import { useEffect, useRef } from "react";
 import { useAuth } from "../providers/AuthProvider";
 import { useChat } from "./ChatContext";
+import { ChatEvents } from "./events";
+import { MessageStatus } from "./types";
+import { useMessageEvents } from "./socket/useMessageEvents";
+import { useConversationEvents } from "./socket/useConversationEvents";
+import { useReactionEvents } from "./socket/useReactionEvents";
+import { useParticipantEvents } from "./socket/useParticipantEvents";
+import { useTypingEvents } from "./socket/useTypingEvents";
+import { emit } from "./socket/useSocketCore";
+import { getSocket } from "./socketClient";
 
+// Backward-compatible aggregated chat socket hook
 export function useChatSocket() {
   const { user } = useAuth();
   const chat = useChat();
-  const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
-  // Références internes pour éviter de réémettre join/load inutilement
-  const lastConvRef = useRef<string | null>(null);
-  const joinedRoomsRef = useRef<Set<string>>(new Set());
+  const enabled = !!user;
 
+  // Connect listener to request conversation list
   useEffect(() => {
-    if (!user) return;
+    if (!enabled) return;
     const socket = getSocket();
-    socketRef.current = socket;
-
-    const onConnect = () => {
-      console.log("[socket] connected");
-      socket.emit(ChatEvents.CONVERSATION_LIST);
-    };
-    interface ChatErrorPayload {
-      code: string;
-      message: string;
-      context?: string;
-      data?: Record<string, unknown>;
-    }
-    const friendlyErrorMessage = (error: ChatErrorPayload): string => {
-      const map: Record<string, string> = {
-        UNAUTHENTICATED: "Authentification requise",
-        RATE_LIMITED: "Trop de messages envoyés, patiente un instant",
-        MESSAGE_TOO_LONG: "Message trop long",
-        EDIT_WINDOW_EXPIRED: "Délai d'édition expiré",
-        DELETE_WINDOW_EXPIRED: "Délai de suppression expiré",
-        NOT_PARTICIPANT: "Accès refusé à cette conversation",
-        FORBIDDEN: "Action non autorisée",
-      };
-      return map[error.code] || error.message || "Erreur";
-    };
-    const onError = (payload: unknown) => {
-      // Backend envoie désormais { error: { code, message, context, data? } }
-      type MaybeErrorWrapper = { error?: ChatErrorPayload };
-      const raw: ChatErrorPayload | undefined =
-        payload && typeof payload === "object" && "error" in payload
-          ? (payload as MaybeErrorWrapper).error
-          : undefined;
-      if (raw) {
-        addToast({
-          title: "Erreur",
-          description: friendlyErrorMessage(raw),
-          color: "danger",
-        });
-      } else {
-        console.error("Socket error", payload);
-      }
-    };
-    const onConversationList = (payload: {
-      conversations: ConversationSummary[];
-    }) => {
-      chat.setConversations(payload.conversations);
-    };
-    const onMessageNew = (msg: ChatMessage) => {
-      // Avoid duplicate: if it's our own message, we'll handle via message.sent
-      if (msg.senderId === user?.id) return;
-      chat.upsertMessages(msg.conversationId, [msg]);
-      // Si on est dans la conversation active et la fenêtre est visible, on marque directement comme livré + lu
-      if (chat.activeConversationId === msg.conversationId) {
-        const visibilityOk =
-          typeof document !== "undefined"
-            ? document.visibilityState === "visible"
-            : true;
-        socket.emit(ChatEvents.MESSAGE_DELIVERED, {
-          conversationId: msg.conversationId,
-          messageIds: [msg.id],
-        });
-        if (visibilityOk) {
-          socket.emit(ChatEvents.MESSAGE_READ, {
-            conversationId: msg.conversationId,
-            messageIds: [msg.id],
-          });
-        }
-      }
-    };
-    const onMessageSent = ({
-      tempId,
-      message,
-    }: {
-      tempId?: string;
-      message: ChatMessage;
-    }) => {
-      if (tempId) chat.confirmMessage(tempId, message);
-      else chat.upsertMessages(message.conversationId, [message]);
-    };
-    const onMessageUpdated = ({ message }: { message: ChatMessage }) => {
-      chat.updateMessage(message);
-    };
-    const onMessageDeleted = ({ messageId }: { messageId: string }) => {
-      // Attempt to find which conversation contains this message (search last loaded conv first)
-      let convId = chat.activeConversationId;
-      if (!convId) {
-        // fallback linear scan (small lists typical in UI state)
-        for (const [cid, list] of Object.entries(chat.messages)) {
-          if (list.find((m) => m.id === messageId)) {
-            convId = cid;
-            break;
-          }
-        }
-      }
-      if (convId) chat.deleteMessage(convId, messageId);
-    };
-    const onConversationCreated = (payload: {
-      conversation: ConversationSummary;
-    }) => {
-      chat.upsertConversation(payload.conversation);
-    };
-    const onConversationUpdated = (payload: {
-      conversation: ConversationSummary;
-    }) => {
-      chat.upsertConversation(payload.conversation);
-    };
-    const onMessageList = (payload: {
-      conversationId: string;
-      messages: ChatMessage[];
-      hasMore: boolean;
-      nextCursor?: string | null;
-      direction?: "initial" | "older";
-    }) => {
-      console.log(
-        "[socket] message.list",
-        payload.conversationId,
-        payload.messages.length
-      );
-      const isPrepend = payload.direction === "older";
-      chat.upsertMessages(payload.conversationId, payload.messages, isPrepend);
-      chat.setHasMore(payload.conversationId, payload.hasMore);
-      chat.setNextCursor(payload.conversationId, payload.nextCursor);
-      chat.setLoadingOlder(payload.conversationId, false);
-      // Marquer comme deliverés tous les messages reçus (non envoyés par nous) encore en status SENT
-      const toDeliver = payload.messages
-        .filter(
-          (m) => m.senderId !== user?.id && m.status === MessageStatus.SENT
-        )
-        .map((m) => m.id);
-      if (toDeliver.length) {
-        socket.emit(ChatEvents.MESSAGE_DELIVERED, {
-          conversationId: payload.conversationId,
-          messageIds: toDeliver,
-        });
-      }
-      // Marquer comme lus si c'est la conversation active
-      if (chat.activeConversationId === payload.conversationId) {
-        const toRead = payload.messages
-          .filter(
-            (m) => m.senderId !== user?.id && m.status !== MessageStatus.READ
-          )
-          .map((m) => m.id);
-        if (toRead.length) {
-          socket.emit(ChatEvents.MESSAGE_READ, {
-            conversationId: payload.conversationId,
-            messageIds: toRead,
-          });
-        }
-      }
-    };
-
-    const onMessageError = (payload: { error: ChatErrorPayload }) => {
-      const { error } = payload;
-      const tempId = (error.data?.tempId as string | undefined) || undefined;
-      const msg = friendlyErrorMessage(error);
-      addToast({
-        title: "Erreur message",
-        description: msg,
-        color: "danger",
-      });
-      if (tempId) chat.markMessageError(tempId, msg);
-    };
-
+    const onConnect = () => emit(ChatEvents.CONVERSATION_LIST);
     socket.on("connect", onConnect);
-    socket.on("error", onError);
-    socket.on(ChatEvents.CONVERSATION_LIST_DATA, onConversationList);
-    socket.on(ChatEvents.MESSAGE_NEW, onMessageNew);
-    socket.on(ChatEvents.MESSAGE_SENT, onMessageSent);
-    socket.on(ChatEvents.MESSAGE_UPDATED, onMessageUpdated);
-    socket.on(ChatEvents.MESSAGE_DELETED, onMessageDeleted);
-    socket.on(ChatEvents.CONVERSATION_CREATED, onConversationCreated);
-    socket.on(ChatEvents.CONVERSATION_UPDATED, onConversationUpdated);
-    socket.on(ChatEvents.MESSAGE_LIST, onMessageList);
-    socket.on(
-      ChatEvents.MESSAGE_DELIVERED,
-      (p: { messageIds: string[]; deliveredAt?: string }) => {
-        if (!chat.activeConversationId) return;
-        const list = chat.messages[chat.activeConversationId] || [];
-        p.messageIds.forEach((id) => {
-          const existing = list.find((m) => m.id === id);
-          if (existing && existing.status === MessageStatus.SENT) {
-            chat.updateMessage({
-              ...existing,
-              status: MessageStatus.DELIVERED,
-              deliveredAt: p.deliveredAt,
-            });
-          }
-        });
-      }
-    );
-    socket.on(
-      ChatEvents.MESSAGE_READ,
-      (p: { messageIds: string[]; userId: string; readAt?: string }) => {
-        if (!chat.activeConversationId) return;
-        // Pour simplifier: on met à jour les messages dont nous sommes l'auteur
-        const msgs = (chat.messages[chat.activeConversationId] || []).filter(
-          (m) => p.messageIds.includes(m.id)
-        );
-        if (!msgs.length) return;
-        msgs.forEach((m) =>
-          chat.updateMessage({
-            ...m,
-            status: MessageStatus.READ,
-            readAt: p.readAt,
-          })
-        );
-      }
-    );
-    socket.on(ChatEvents.MESSAGE_ERROR, onMessageError);
-    type Reaction = {
-      id: string;
-      messageId: string;
-      userId: string;
-      emoji: string;
-      createdAt: string;
-    };
-    socket.on(
-      ChatEvents.REACTION_ADDED,
-      (p: { messageId: string; reaction: Reaction }) => {
-        let convId = chat.activeConversationId;
-        if (!convId) {
-          for (const [cid, list] of Object.entries(chat.messages)) {
-            if (list.some((m) => m.id === p.messageId)) {
-              convId = cid;
-              break;
-            }
-          }
-        }
-        if (convId) {
-          chat.addMessageReaction(convId, p.messageId, p.reaction);
-        }
-      }
-    );
-    socket.on(
-      ChatEvents.REACTION_REMOVED,
-      (p: {
-        messageId: string;
-        reaction: { messageId: string; userId: string; emoji: string };
-      }) => {
-        let convId = chat.activeConversationId;
-        if (!convId) {
-          for (const [cid, list] of Object.entries(chat.messages)) {
-            if (list.some((m) => m.id === p.messageId)) {
-              convId = cid;
-              break;
-            }
-          }
-        }
-        if (convId) {
-          chat.removeMessageReaction(
-            convId,
-            p.messageId,
-            p.reaction.userId,
-            p.reaction.emoji
-          );
-        }
-      }
-    );
-    socket.on(
-      ChatEvents.PARTICIPANT_READ,
-      (p: { conversationId: string; userId: string; lastReadAt?: string }) => {
-        chat.updateParticipantRead(p.conversationId, p.userId, p.lastReadAt);
-      }
-    );
-    // Typing indicators
-    socket.on(
-      ChatEvents.TYPING_STARTED,
-      (p: { conversationId: string; userId: string; at?: string }) => {
-        if (p.userId === user?.id) return; // ignore self
-        chat.setTyping(p.conversationId, p.userId, true);
-      }
-    );
-    socket.on(
-      ChatEvents.TYPING_STOPPED,
-      (p: { conversationId: string; userId: string; at?: string }) => {
-        if (p.userId === user?.id) return;
-        chat.setTyping(p.conversationId, p.userId, false);
-      }
-    );
-
     return () => {
       socket.off("connect", onConnect);
-      socket.off("error", onError);
-      socket.off(ChatEvents.CONVERSATION_LIST_DATA, onConversationList);
-      socket.off(ChatEvents.MESSAGE_NEW, onMessageNew);
-      socket.off(ChatEvents.MESSAGE_SENT, onMessageSent);
-      socket.off(ChatEvents.MESSAGE_UPDATED, onMessageUpdated);
-      socket.off(ChatEvents.MESSAGE_DELETED, onMessageDeleted);
-      socket.off(ChatEvents.CONVERSATION_CREATED, onConversationCreated);
-      socket.off(ChatEvents.CONVERSATION_UPDATED, onConversationUpdated);
-      socket.off(ChatEvents.MESSAGE_LIST, onMessageList);
-      socket.off(ChatEvents.MESSAGE_ERROR, onMessageError);
-      socket.off(ChatEvents.REACTION_ADDED);
-      socket.off(ChatEvents.REACTION_REMOVED);
-      socket.off(ChatEvents.PARTICIPANT_READ);
-      socket.off(ChatEvents.MESSAGE_DELIVERED);
-      socket.off(ChatEvents.MESSAGE_READ);
-      socket.off(ChatEvents.TYPING_STARTED);
-      socket.off(ChatEvents.TYPING_STOPPED);
     };
-  }, [user, chat]);
+  }, [enabled]);
 
-  const sendMessage = useCallback(
-    (conversationId: string, content: string) => {
-      if (!socketRef.current || !user) return;
-      const tempId = `temp-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2)}`;
-      const optimistic: ChatMessage = {
-        id: tempId,
-        conversationId,
-        senderId: user.id,
-        content,
-        type: MessageType.TEXT,
-        status: MessageStatus.SENT,
-        isDeleted: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        sender: { id: user.id, email: user.email, name: user.name },
-        _optimistic: true,
-      };
-      chat.upsertMessages(conversationId, [optimistic]);
-      socketRef.current.emit(ChatEvents.MESSAGE_SEND, {
-        conversationId,
-        content,
-        tempId,
-        type: MessageType.TEXT,
-      });
-    },
-    [user, chat]
-  );
+  // Sub modules
+  const {
+    sendMessage,
+    editMessage,
+    deleteMessage,
+    resendMessage,
+    loadMessages,
+    loadOlder,
+  } = useMessageEvents(enabled);
+  const { createConversation, updateConversationTitle } =
+    useConversationEvents(enabled);
+  const { addReaction, removeReaction } = useReactionEvents(enabled);
+  const { emitTyping } = useTypingEvents(enabled);
+  useParticipantEvents(enabled);
 
-  const loadMessages = useCallback(
-    (conversationId: string, cursor?: string) => {
-      if (!socketRef.current) return;
-      socketRef.current.emit(ChatEvents.MESSAGE_LOAD, {
-        conversationId,
-        cursor,
-        limit: 30,
-      });
-    },
-    []
-  );
-
-  const loadOlder = useCallback(
-    (conversationId: string) => {
-      const meta = chat.meta[conversationId];
-      if (!meta || !meta.hasMore || meta.loadingOlder) return;
-      chat.setLoadingOlder(conversationId, true);
-      loadMessages(conversationId, meta.nextCursor || undefined);
-    },
-    [chat, loadMessages]
-  );
-
-  const joinConversation = useCallback((conversationId: string) => {
-    if (!socketRef.current) return;
-    socketRef.current.emit(ChatEvents.ROOM_JOIN, { conversationId });
-  }, []);
-
-  const editMessage = useCallback(
-    (messageId: string, conversationId: string, content: string) => {
-      if (!socketRef.current) return;
-      socketRef.current.emit(ChatEvents.MESSAGE_EDIT, {
-        messageId,
-        conversationId,
-        content,
-      });
-    },
-    []
-  );
-
-  const deleteMessage = useCallback(
-    (messageId: string, conversationId: string) => {
-      if (!socketRef.current) return;
-      socketRef.current.emit(ChatEvents.MESSAGE_DELETE, {
-        messageId,
-        conversationId,
-      });
-    },
-    []
-  );
-
-  const createConversation = useCallback(
-    (
-      participantUserIds: string[],
-      title?: string,
-      type: "DIRECT" | "GROUP" = "DIRECT"
-    ) => {
-      if (!socketRef.current) return;
-      socketRef.current.emit(ChatEvents.CONVERSATION_CREATE, {
-        participantUserIds,
-        title,
-        type,
-      });
-    },
-    []
-  );
-
-  const updateConversationTitle = useCallback(
-    (conversationId: string, title: string) => {
-      if (!socketRef.current) return;
-      socketRef.current.emit(ChatEvents.CONVERSATION_TITLE_UPDATE, {
-        conversationId,
-        title,
-      });
-    },
-    []
-  );
-
+  // Lifecycle: join & initial load once
+  const lastConvRef = useRef<string | null>(null);
+  const joinedRoomsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    // Garde pour éviter réémissions multiples sur la même conversation
+    if (!enabled) return;
     const cid = chat.activeConversationId;
     if (!cid) return;
-
-    // Si déjà traité cette conversation (et déjà join), ne rien refaire
     if (lastConvRef.current === cid) return;
-
-    // Join la room une seule fois
     if (!joinedRoomsRef.current.has(cid)) {
-      joinConversation(cid);
+      emit(ChatEvents.ROOM_JOIN, { conversationId: cid });
       joinedRoomsRef.current.add(cid);
     }
-
-    // Charger uniquement si aucun message local encore (pagination manuelle utilisera loadMessages séparément)
     if (!chat.messages[cid] || chat.messages[cid].length === 0) {
       loadMessages(cid);
     }
-
-    // Marquer comme lus les messages non lus déjà présents localement
     const list = chat.messages[cid] || [];
     const toRead = list
       .filter((m) => m.senderId !== user?.id && m.status !== MessageStatus.READ)
       .map((m) => m.id);
-    if (toRead.length && socketRef.current) {
-      socketRef.current.emit(ChatEvents.MESSAGE_READ, {
+    if (toRead.length) {
+      emit(ChatEvents.MESSAGE_READ, {
         conversationId: cid,
         messageIds: toRead,
       });
     }
-
     lastConvRef.current = cid;
-    // NOTE: ne pas ajouter chat.messages aux deps sinon chaque message/delivery relance join/load
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.activeConversationId, joinConversation, loadMessages, user?.id]);
+  }, [chat.activeConversationId, enabled]);
 
   return {
     sendMessage,
     loadMessages,
     loadOlder,
-    joinConversation,
+    joinConversation: (conversationId: string) =>
+      emit(ChatEvents.ROOM_JOIN, { conversationId }),
     createConversation,
     editMessage,
     deleteMessage,
     updateConversationTitle,
-    addReaction: (conversationId: string, messageId: string, emoji: string) => {
-      if (!socketRef.current) return;
-      socketRef.current.emit(ChatEvents.REACTION_ADD, {
-        conversationId,
-        messageId,
-        emoji,
-      });
-    },
-    removeReaction: (
-      conversationId: string,
-      messageId: string,
-      emoji: string
-    ) => {
-      if (!socketRef.current) return;
-      socketRef.current.emit(ChatEvents.REACTION_REMOVE, {
-        conversationId,
-        messageId,
-        emoji,
-      });
-    },
-    resendMessage: (conversationId: string, tempId: string) => {
-      const list = chat.messages[conversationId] || [];
-      const msg = list.find((m) => m.id === tempId);
-      if (!msg || !msg._error || !socketRef.current) return;
-      chat.resetMessagePending(tempId);
-      socketRef.current.emit(ChatEvents.MESSAGE_SEND, {
-        conversationId,
-        content: msg.content,
-        tempId,
-        type: msg.type,
-      });
-    },
-    emitTyping: (conversationId: string, isTyping: boolean) => {
-      if (!socketRef.current) return;
-      socketRef.current.emit(
-        isTyping ? ChatEvents.TYPING_START : ChatEvents.TYPING_STOP,
-        {
-          conversationId,
-        }
-      );
-    },
+    addReaction,
+    removeReaction,
+    resendMessage,
+    emitTyping,
   };
 }
