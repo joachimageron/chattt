@@ -24,15 +24,9 @@ export function useReactionEvents(enabled: boolean) {
   useSocketEvent<ReactionAdded>(
     ChatEvents.REACTION_ADDED,
     (p) => {
-      let convId = chat.activeConversationId;
-      if (!convId) {
-        for (const [cid, list] of Object.entries(chat.messages)) {
-          if (list.some((m) => m.id === p.messageId)) {
-            convId = cid;
-            break;
-          }
-        }
-      }
+      const convId =
+        chat.getConversationIdForMessage(p.messageId) ||
+        chat.activeConversationId;
       if (convId) chat.addMessageReaction(convId, p.messageId, p.reaction);
     },
     enabled
@@ -41,15 +35,9 @@ export function useReactionEvents(enabled: boolean) {
   useSocketEvent<ReactionRemoved>(
     ChatEvents.REACTION_REMOVED,
     (p) => {
-      let convId = chat.activeConversationId;
-      if (!convId) {
-        for (const [cid, list] of Object.entries(chat.messages)) {
-          if (list.some((m) => m.id === p.messageId)) {
-            convId = cid;
-            break;
-          }
-        }
-      }
+      const convId =
+        chat.getConversationIdForMessage(p.messageId) ||
+        chat.activeConversationId;
       if (convId)
         chat.removeMessageReaction(
           convId,

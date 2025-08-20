@@ -96,16 +96,9 @@ export function useMessageEvents(enabled: boolean) {
   useSocketEvent<{ messageId: string }>(
     ChatEvents.MESSAGE_DELETED,
     ({ messageId }) => {
-      // naive search, future: index map
-      let convId = chat.activeConversationId;
-      if (!convId) {
-        for (const [cid, list] of Object.entries(chat.messages)) {
-          if (list.find((m) => m.id === messageId)) {
-            convId = cid;
-            break;
-          }
-        }
-      }
+      const convId =
+        chat.getConversationIdForMessage(messageId) ||
+        chat.activeConversationId;
       if (convId) chat.deleteMessage(convId, messageId);
     },
     enabled
