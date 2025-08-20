@@ -17,7 +17,7 @@ import { AuthedSocket } from './socket.types';
 import { MessageHandler } from './handlers/message.handler';
 import { ConversationHandler } from './handlers/conversation.handler';
 import { PresenceHandler } from './handlers/presence.handler';
-import { ChatFlowService } from './services/chat-flow.service';
+import { ExecutionContextService } from './services/execution-context.service';
 import { LoadMessagesInput } from './dto/load-messages.input';
 import { MarkDeliveredInput } from './dto/mark-delivered.input';
 import { MarkReadInput } from './dto/mark-read.input';
@@ -42,7 +42,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly messageHandler: MessageHandler,
     private readonly conversationHandler: ConversationHandler,
     private readonly presenceHandler: PresenceHandler,
-    private readonly flow: ChatFlowService,
+    private readonly exec: ExecutionContextService,
   ) {}
 
   @WebSocketServer()
@@ -62,8 +62,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       `Client disconnected: ${client.id}${user ? ' user=' + user.email : ''}`,
     );
   }
-
-  // Helpers moved to ChatFlowService (flow)
 
   @SubscribeMessage(ChatEvents.PING)
   handlePing(@ConnectedSocket() client: AuthedSocket) {
@@ -89,8 +87,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     this.presenceHandler.leaveRoom(client, payload);
   }
-
-  // Rate limiting moved to ChatFlowService
 
   @SubscribeMessage(ChatEvents.MESSAGE_SEND)
   handleSend(

@@ -9,7 +9,8 @@ import { Message } from './entities/message.entity';
 import { Conversation } from './entities/conversation.entity';
 import { ConversationParticipant } from './entities/conversation-participant.entity';
 import { MessageReaction } from './entities/messageReaction.entity';
-import { ChatFlowService } from './services/chat-flow.service';
+import { ExecutionContextService } from './services/execution-context.service';
+import { RateLimiterService } from './services/rate-limiter.service';
 import { MessageHandler } from './handlers/message.handler';
 import { ConversationHandler } from './handlers/conversation.handler';
 import { PresenceHandler } from './handlers/presence.handler';
@@ -29,7 +30,8 @@ import { PresenceHandler } from './handlers/presence.handler';
     ReactionService,
     MessageService,
     ConversationService,
-    ChatFlowService,
+    ExecutionContextService,
+    RateLimiterService,
     MessageHandler,
     ConversationHandler,
     PresenceHandler,
@@ -39,7 +41,8 @@ import { PresenceHandler } from './handlers/presence.handler';
     ReactionService,
     MessageService,
     ConversationService,
-    ChatFlowService,
+    ExecutionContextService,
+    RateLimiterService,
   ],
 })
 export class ChatModule {}

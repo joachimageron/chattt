@@ -12,7 +12,8 @@ import { MarkReadInput } from '../dto/mark-read.input';
 import { EditMessageInput } from '../dto/edit-message.input';
 import { DeleteMessageInput } from '../dto/delete-message.input';
 import { ReactionInput } from '../dto/reaction.input';
-import { ChatFlowService } from '../services/chat-flow.service';
+import { ExecutionContextService } from '../services/execution-context.service';
+import { RateLimiterService } from '../services/rate-limiter.service';
 import { ChatErrorCode } from '../chat-errors';
 import { Server } from 'socket.io';
 
@@ -22,7 +23,8 @@ export class MessageHandler {
     private readonly messages: MessageService,
     private readonly participants: ParticipantService,
     private readonly reactions: ReactionService,
-    private readonly flow: ChatFlowService,
+    private readonly exec: ExecutionContextService,
+    private readonly rateLimiter: RateLimiterService,
   ) {}
 
   handleSend(
@@ -30,12 +32,12 @@ export class MessageHandler {
     body: SendMessageInput & { tempId?: string },
     server: Server,
   ) {
-    const user = this.flow.ensureUser(client);
+    const user = this.exec.ensureUser(client);
     if (!user) return;
-    this.flow.runMessage(
+    this.exec.runMessage(
       client,
       async () => {
-        if (!this.flow.checkRateLimit(user.id)) {
+        if (!this.rateLimiter.check(user.id)) {
           client.emit(ChatEvents.MESSAGE_ERROR, {
             error: {
               code: ChatErrorCode.RATE_LIMITED,
@@ -70,9 +72,9 @@ export class MessageHandler {
   }
 
   handleLoad(client: AuthedSocket, body: LoadMessagesInput) {
-    const user = this.flow.ensureUser(client);
+    const user = this.exec.ensureUser(client);
     if (!user) return;
-    this.flow.runMessage(client, async () => {
+    this.exec.runMessage(client, async () => {
       await this.participants.ensureParticipant(body.conversationId, user.id);
       const page = await this.messages.getMessages(
         body.conversationId,
@@ -94,9 +96,9 @@ export class MessageHandler {
     body: MarkDeliveredInput,
     server: Server,
   ) {
-    const user = this.flow.ensureUser(client);
+    const user = this.exec.ensureUser(client);
     if (!user) return;
-    this.flow.runMessage(client, async () => {
+    this.exec.runMessage(client, async () => {
       await this.messages.markDelivered(
         body.conversationId,
         body.messageIds,
@@ -111,9 +113,9 @@ export class MessageHandler {
   }
 
   handleRead(client: AuthedSocket, body: MarkReadInput, server: Server) {
-    const user = this.flow.ensureUser(client);
+    const user = this.exec.ensureUser(client);
     if (!user) return;
-    this.flow.runMessage(client, async () => {
+    this.exec.runMessage(client, async () => {
       await this.messages.markReadMessages(
         body.conversationId,
         body.messageIds,
@@ -138,9 +140,9 @@ export class MessageHandler {
   }
 
   handleEdit(client: AuthedSocket, body: EditMessageInput, server: Server) {
-    const user = this.flow.ensureUser(client);
+    const user = this.exec.ensureUser(client);
     if (!user) return;
-    this.flow.runMessage(client, async () => {
+    this.exec.runMessage(client, async () => {
       const updated = await this.messages.editMessage(
         body.messageId,
         user.id,
@@ -153,9 +155,9 @@ export class MessageHandler {
   }
 
   handleDelete(client: AuthedSocket, body: DeleteMessageInput, server: Server) {
-    const user = this.flow.ensureUser(client);
+    const user = this.exec.ensureUser(client);
     if (!user) return;
-    this.flow.runMessage(client, async () => {
+    this.exec.runMessage(client, async () => {
       const deleted = await this.messages.deleteMessage(
         body.messageId,
         user.id,
@@ -167,9 +169,9 @@ export class MessageHandler {
   }
 
   handleReactionAdd(client: AuthedSocket, body: ReactionInput, server: Server) {
-    const user = this.flow.ensureUser(client);
+    const user = this.exec.ensureUser(client);
     if (!user) return;
-    this.flow.runMessage(client, async () => {
+    this.exec.runMessage(client, async () => {
       const reactions = await this.reactions.addReaction(
         body.messageId,
         body.conversationId,
@@ -194,9 +196,9 @@ export class MessageHandler {
     body: ReactionInput,
     server: Server,
   ) {
-    const user = this.flow.ensureUser(client);
+    const user = this.exec.ensureUser(client);
     if (!user) return;
-    this.flow.runMessage(client, async () => {
+    this.exec.runMessage(client, async () => {
       const reactions = await this.reactions.removeReaction(
         body.messageId,
         body.conversationId,

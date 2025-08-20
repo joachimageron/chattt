@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AuthedSocket } from '../socket.types';
 import { ChatEvents } from '../events';
 import { ParticipantService } from '../services/participant.service';
-import { ChatFlowService } from '../services/chat-flow.service';
+import { ExecutionContextService } from '../services/execution-context.service';
 import { JoinRoomInput } from '../dto/join-room.input';
 import { TypingEventInput } from '../dto/typing-event.input';
 
@@ -10,13 +10,13 @@ import { TypingEventInput } from '../dto/typing-event.input';
 export class PresenceHandler {
   constructor(
     private readonly participants: ParticipantService,
-    private readonly flow: ChatFlowService,
+    private readonly exec: ExecutionContextService,
   ) {}
 
   joinRoom(client: AuthedSocket, payload: JoinRoomInput) {
-    const user = this.flow.ensureUser(client);
+    const user = this.exec.ensureUser(client);
     if (!user) return;
-    this.flow.runGeneral(client, async () => {
+    this.exec.runGeneral(client, async () => {
       await this.participants.ensureParticipant(
         payload.conversationId,
         user.id,
@@ -37,9 +37,9 @@ export class PresenceHandler {
   }
 
   typingStart(client: AuthedSocket, body: TypingEventInput) {
-    const user = this.flow.ensureUser(client);
+    const user = this.exec.ensureUser(client);
     if (!user || !body?.conversationId) return;
-    this.flow.runGeneral(client, async () => {
+    this.exec.runGeneral(client, async () => {
       await this.participants.ensureParticipant(body.conversationId, user.id);
       client.to(body.conversationId).emit(ChatEvents.TYPING_STARTED, {
         conversationId: body.conversationId,
@@ -50,9 +50,9 @@ export class PresenceHandler {
   }
 
   typingStop(client: AuthedSocket, body: TypingEventInput) {
-    const user = this.flow.ensureUser(client);
+    const user = this.exec.ensureUser(client);
     if (!user || !body?.conversationId) return;
-    this.flow.runGeneral(client, async () => {
+    this.exec.runGeneral(client, async () => {
       await this.participants.ensureParticipant(body.conversationId, user.id);
       client.to(body.conversationId).emit(ChatEvents.TYPING_STOPPED, {
         conversationId: body.conversationId,
