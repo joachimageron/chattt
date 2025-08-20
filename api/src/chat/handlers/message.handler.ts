@@ -4,7 +4,7 @@ import { ChatEvents } from '../events';
 import { MessageService } from '../services/message.service';
 import { ParticipantService } from '../services/participant.service';
 import { ReactionService } from '../services/reaction.service';
-import { sanitizeMessage, mapReaction } from '../sanitize';
+import { toMessageDto, toReactionDto } from '../mappers';
 import { SendMessageInput } from '../dto/send-message.input';
 import { LoadMessagesInput } from '../dto/load-messages.input';
 import { MarkDeliveredInput } from '../dto/mark-delivered.input';
@@ -49,7 +49,11 @@ export class MessageHandler {
           return;
         }
         const message = await this.messages.sendMessage(body, user);
-        const sanitized = sanitizeMessage(message);
+        const sanitized = toMessageDto(
+          message as typeof message & {
+            reactions?: any[]; // none at creation
+          },
+        );
         server
           .to(message.conversationId)
           .emit(ChatEvents.MESSAGE_NEW, sanitized);
@@ -83,7 +87,13 @@ export class MessageHandler {
       );
       client.emit(ChatEvents.MESSAGE_LIST, {
         conversationId: body.conversationId,
-        messages: page.messages.map(sanitizeMessage),
+        messages: page.messages.map((m) =>
+          toMessageDto(
+            m as typeof m & {
+              reactions?: any[];
+            },
+          ),
+        ),
         hasMore: page.hasMore,
         nextCursor: page.nextCursor,
         direction: body.before ? 'older' : 'initial',
@@ -149,7 +159,11 @@ export class MessageHandler {
         body.content,
       );
       server.to(body.conversationId).emit(ChatEvents.MESSAGE_UPDATED, {
-        message: sanitizeMessage(updated),
+        message: toMessageDto(
+          updated as typeof updated & {
+            reactions?: any[];
+          },
+        ),
       });
     });
   }
@@ -180,7 +194,7 @@ export class MessageHandler {
       );
       server.to(body.conversationId).emit(ChatEvents.REACTION_ADDED, {
         messageId: body.messageId,
-        reaction: mapReaction(reaction),
+        reaction: toReactionDto(reaction as typeof reaction & { user?: any }),
       });
     });
   }

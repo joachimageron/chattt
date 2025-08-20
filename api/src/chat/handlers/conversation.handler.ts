@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import { ChatEvents } from '../events';
 import { ConversationService } from '../services/conversation.service';
 import { ParticipantService } from '../services/participant.service';
-import { sanitizeConversation } from '../sanitize';
+import { toConversationDto } from '../mappers';
 import { CreateConversationInput } from '../dto/create-conversation.input';
 import { UpdateConversationTitleInput } from '../dto/update-conversation-title.input';
 import { ExecutionContextService } from '../services/execution-context.service';
@@ -23,7 +23,13 @@ export class ConversationHandler {
     this.exec.runGeneral(client, async () => {
       const convos = await this.conversations.listConversationsForUser(user.id);
       client.emit(ChatEvents.CONVERSATION_LIST_DATA, {
-        conversations: convos.map(sanitizeConversation),
+        conversations: convos.map((c) =>
+          toConversationDto(
+            c as typeof c & {
+              messages?: any[];
+            },
+          ),
+        ),
       });
     });
   }
@@ -36,13 +42,17 @@ export class ConversationHandler {
       await client.join(convo.id);
       client.data.joinedRooms?.add(convo.id);
       client.emit(ChatEvents.CONVERSATION_CREATED, {
-        conversation: sanitizeConversation(convo),
+        conversation: toConversationDto(
+          convo as typeof convo & { messages?: any[] },
+        ),
       });
       convo.participants
         .filter((p) => p.userId !== user.id)
         .forEach(() => {
           server.to(convo.id).emit(ChatEvents.CONVERSATION_UPDATED, {
-            conversation: sanitizeConversation(convo),
+            conversation: toConversationDto(
+              convo as typeof convo & { messages?: any[] },
+            ),
           });
         });
     });
@@ -62,7 +72,9 @@ export class ConversationHandler {
         body.title,
       );
       server.to(convo.id).emit(ChatEvents.CONVERSATION_UPDATED, {
-        conversation: sanitizeConversation(convo),
+        conversation: toConversationDto(
+          convo as typeof convo & { messages?: any[] },
+        ),
       });
     });
   }
