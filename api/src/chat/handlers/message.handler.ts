@@ -83,7 +83,7 @@ export class MessageHandler {
       const page = await this.messages.getMessages(
         body.conversationId,
         body.limit ?? 30,
-        body.before || undefined,
+        body.cursor || body.before || undefined,
       );
       client.emit(ChatEvents.MESSAGE_LIST, {
         conversationId: body.conversationId,
@@ -95,8 +95,8 @@ export class MessageHandler {
           ),
         ),
         hasMore: page.hasMore,
-        nextCursor: page.nextCursor,
-        direction: body.before ? 'older' : 'initial',
+        nextCursor: page.nextCursor, // ISO date string of oldest currently loaded
+        direction: body.cursor || body.before ? 'older' : 'initial',
       });
     });
   }

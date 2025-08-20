@@ -15,11 +15,21 @@ export class LoadMessagesInput {
   @IsNotEmpty()
   conversationId: string;
 
-  // Cursor = ISO date string (createdAt of the oldest currently loaded message) to fetch older messages
-  @Field({ nullable: true })
+  /**
+   * Deprecated: use cursor. Still accepted for backward compatibility.
+   */
+  @Field({ nullable: true, description: 'Deprecated: use cursor instead' })
   @IsOptional()
   @IsString()
   before?: string;
+
+  /**
+   * Backward pagination cursor: ISO date (createdAt of oldest currently loaded message)
+   */
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
 
   @Field(() => Int, {
     nullable: true,

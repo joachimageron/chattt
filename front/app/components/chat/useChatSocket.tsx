@@ -350,11 +350,11 @@ export function useChatSocket() {
   );
 
   const loadMessages = useCallback(
-    (conversationId: string, before?: string) => {
+    (conversationId: string, cursor?: string) => {
       if (!socketRef.current) return;
       socketRef.current.emit(ChatEvents.MESSAGE_LOAD, {
         conversationId,
-        before,
+        cursor,
         limit: 30,
       });
     },
