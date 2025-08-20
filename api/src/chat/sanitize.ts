@@ -55,6 +55,14 @@ export function sanitizeParticipant(p: ParticipantWithUser) {
 }
 
 export function sanitizeConversation(convo: Conversation) {
+  let lastMessage;
+  if (convo.messages && convo.messages.length) {
+    if (convo.messages.length === 1) lastMessage = convo.messages[0];
+    else
+      lastMessage = [...convo.messages].sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      )[0];
+  }
   return {
     id: convo.id,
     type: convo.type,
@@ -62,13 +70,8 @@ export function sanitizeConversation(convo: Conversation) {
     createdAt: convo.createdAt,
     updatedAt: convo.updatedAt,
     participants: (convo.participants || []).map(sanitizeParticipant),
-    lastMessage:
-      convo.messages && convo.messages.length
-        ? sanitizeMessage(
-            [...convo.messages].sort(
-              (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-            )[0],
-          )
-        : undefined,
+    lastMessage: lastMessage
+      ? sanitizeMessage(lastMessage as unknown as MessageWithOptionals)
+      : undefined,
   };
 }

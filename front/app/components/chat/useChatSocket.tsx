@@ -74,12 +74,12 @@ export function useChatSocket() {
           typeof document !== "undefined"
             ? document.visibilityState === "visible"
             : true;
-        socket.emit("message.delivered", {
+        socket.emit(ChatEvents.MESSAGE_DELIVERED, {
           conversationId: msg.conversationId,
           messageIds: [msg.id],
         });
         if (visibilityOk) {
-          socket.emit("message.read", {
+          socket.emit(ChatEvents.MESSAGE_READ, {
             conversationId: msg.conversationId,
             messageIds: [msg.id],
           });
@@ -147,7 +147,7 @@ export function useChatSocket() {
         )
         .map((m) => m.id);
       if (toDeliver.length) {
-        socket.emit("message.delivered", {
+        socket.emit(ChatEvents.MESSAGE_DELIVERED, {
           conversationId: payload.conversationId,
           messageIds: toDeliver,
         });
@@ -160,7 +160,7 @@ export function useChatSocket() {
           )
           .map((m) => m.id);
         if (toRead.length) {
-          socket.emit("message.read", {
+          socket.emit(ChatEvents.MESSAGE_READ, {
             conversationId: payload.conversationId,
             messageIds: toRead,
           });
@@ -442,7 +442,7 @@ export function useChatSocket() {
       .filter((m) => m.senderId !== user?.id && m.status !== MessageStatus.READ)
       .map((m) => m.id);
     if (toRead.length && socketRef.current) {
-      socketRef.current.emit("message.read", {
+      socketRef.current.emit(ChatEvents.MESSAGE_READ, {
         conversationId: cid,
         messageIds: toRead,
       });

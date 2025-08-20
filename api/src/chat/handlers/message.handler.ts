@@ -6,6 +6,12 @@ import { ParticipantService } from '../services/participant.service';
 import { ReactionService } from '../services/reaction.service';
 import { sanitizeMessage } from '../sanitize';
 import { SendMessageInput } from '../dto/send-message.input';
+import { LoadMessagesInput } from '../dto/load-messages.input';
+import { MarkDeliveredInput } from '../dto/mark-delivered.input';
+import { MarkReadInput } from '../dto/mark-read.input';
+import { EditMessageInput } from '../dto/edit-message.input';
+import { DeleteMessageInput } from '../dto/delete-message.input';
+import { ReactionInput } from '../dto/reaction.input';
 import { ChatFlowService } from '../services/chat-flow.service';
 import { ChatErrorCode } from '../chat-errors';
 import { Server } from 'socket.io';
@@ -63,10 +69,7 @@ export class MessageHandler {
     );
   }
 
-  handleLoad(
-    client: AuthedSocket,
-    body: { conversationId: string; before?: string; limit?: number },
-  ) {
+  handleLoad(client: AuthedSocket, body: LoadMessagesInput) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
     this.flow.runMessage(client, async () => {
@@ -76,10 +79,9 @@ export class MessageHandler {
         body.limit ?? 30,
         body.before || undefined,
       );
-      const asc = [...page.messages].reverse();
       client.emit(ChatEvents.MESSAGE_LIST, {
         conversationId: body.conversationId,
-        messages: asc.map(sanitizeMessage),
+        messages: page.messages.map(sanitizeMessage),
         hasMore: page.hasMore,
         nextCursor: page.nextCursor,
         direction: body.before ? 'older' : 'initial',
@@ -89,7 +91,7 @@ export class MessageHandler {
 
   handleDelivered(
     client: AuthedSocket,
-    body: { conversationId: string; messageIds: string[] },
+    body: MarkDeliveredInput,
     server: Server,
   ) {
     const user = this.flow.ensureUser(client);
@@ -108,11 +110,7 @@ export class MessageHandler {
     });
   }
 
-  handleRead(
-    client: AuthedSocket,
-    body: { conversationId: string; messageIds: string[] },
-    server: Server,
-  ) {
+  handleRead(client: AuthedSocket, body: MarkReadInput, server: Server) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
     this.flow.runMessage(client, async () => {
@@ -139,11 +137,7 @@ export class MessageHandler {
     });
   }
 
-  handleEdit(
-    client: AuthedSocket,
-    body: { messageId: string; content: string; conversationId: string },
-    server: Server,
-  ) {
+  handleEdit(client: AuthedSocket, body: EditMessageInput, server: Server) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
     this.flow.runMessage(client, async () => {
@@ -158,11 +152,7 @@ export class MessageHandler {
     });
   }
 
-  handleDelete(
-    client: AuthedSocket,
-    body: { messageId: string; conversationId: string },
-    server: Server,
-  ) {
+  handleDelete(client: AuthedSocket, body: DeleteMessageInput, server: Server) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
     this.flow.runMessage(client, async () => {
@@ -176,11 +166,7 @@ export class MessageHandler {
     });
   }
 
-  handleReactionAdd(
-    client: AuthedSocket,
-    body: { messageId: string; conversationId: string; emoji: string },
-    server: Server,
-  ) {
+  handleReactionAdd(client: AuthedSocket, body: ReactionInput, server: Server) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
     this.flow.runMessage(client, async () => {
@@ -205,7 +191,7 @@ export class MessageHandler {
 
   handleReactionRemove(
     client: AuthedSocket,
-    body: { messageId: string; conversationId: string; emoji: string },
+    body: ReactionInput,
     server: Server,
   ) {
     const user = this.flow.ensureUser(client);

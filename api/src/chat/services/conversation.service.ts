@@ -25,17 +25,27 @@ export class ConversationService {
   ) {}
 
   async listConversationsForUser(userId: string): Promise<Conversation[]> {
-    return this.convoRepo
+    // Load conversations with participants + their users and ONLY the last message via subquery to avoid loading full history.
+    const qb = this.convoRepo
       .createQueryBuilder('c')
       .innerJoin('c.participants', 'selfP', 'selfP.userId = :userId', {
         userId,
       })
       .leftJoinAndSelect('c.participants', 'p')
       .leftJoinAndSelect('p.user', 'u')
-      .leftJoinAndSelect('c.messages', 'm')
-      .distinct(true)
+      .leftJoinAndSelect(
+        'c.messages',
+        'm',
+        `m.id = (
+          SELECT m2.id FROM messages m2
+          WHERE m2."conversationId" = c.id
+          ORDER BY m2."createdAt" DESC
+          LIMIT 1
+        )`,
+      )
       .orderBy('c.updatedAt', 'DESC')
-      .getMany();
+      .distinct(true);
+    return qb.getMany();
   }
 
   async createDirectConversation(
@@ -67,7 +77,7 @@ export class ConversationService {
       if (existing) {
         const full = await manager.getRepository(Conversation).findOne({
           where: { id: existing.id },
-          relations: ['participants', 'participants.user', 'messages'],
+          relations: ['participants', 'participants.user'],
         });
         return full ?? existing;
       }
@@ -87,7 +97,7 @@ export class ConversationService {
       ]);
       const fullNew = await manager.getRepository(Conversation).findOne({
         where: { id: convo.id },
-        relations: ['participants', 'participants.user', 'messages'],
+        relations: ['participants', 'participants.user'],
       });
       return fullNew ?? convo;
     });
@@ -122,7 +132,7 @@ export class ConversationService {
       );
       const full = await manager.getRepository(Conversation).findOne({
         where: { id: convo.id },
-        relations: ['participants', 'participants.user', 'messages'],
+        relations: ['participants', 'participants.user'],
       });
       return full ?? convo;
     });

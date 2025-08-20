@@ -64,6 +64,8 @@ export class MessageService {
     limit = 30,
     cursor?: string,
   ): Promise<MessagePaginationResult> {
+    // We paginate older messages using a backwards cursor (createdAt timestamp of oldest loaded message)
+    // Query directly in ascending order to avoid reversing in memory.
     const qb = this.messageRepo
       .createQueryBuilder('m')
       .leftJoinAndSelect('m.sender', 's')
@@ -71,12 +73,15 @@ export class MessageService {
     if (cursor) {
       qb.andWhere('m.createdAt < :cursor', { cursor });
     }
-    const rows = await qb
+    // We still select limit + 1 to detect hasMore, ordering DESC then reversing would allow simple < cursor condition.
+    // Alternative: order DESC, slice, then reverse for ascending output. We'll implement optimized variant: fetch DESC for cursor logic, then reverse minimal slice.
+    const descRows = await qb
       .orderBy('m.createdAt', 'DESC')
       .take(limit + 1)
       .getMany();
-    const hasMore = rows.length > limit;
-    const sliced = hasMore ? rows.slice(0, limit) : rows;
+    const hasMore = descRows.length > limit;
+    const slicedDesc = hasMore ? descRows.slice(0, limit) : descRows;
+    const sliced = [...slicedDesc].reverse(); // ascending for client consumption
     if (!sliced.length) return { messages: [], hasMore: false };
     const ids = sliced.map((m) => m.id);
     const reactions = await this.reactionRepo.find({
@@ -90,7 +95,7 @@ export class MessageService {
     (sliced as (Message & { reactions?: MessageReaction[] })[]).forEach(
       (m) => (m['reactions'] = map[m.id] || []),
     );
-    const oldest = sliced[sliced.length - 1];
+    const oldest = sliced[0]; // first item is oldest now (ascending)
     return {
       messages: sliced,
       hasMore,

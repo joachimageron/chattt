@@ -3,6 +3,8 @@ import { AuthedSocket } from '../socket.types';
 import { ChatEvents } from '../events';
 import { ParticipantService } from '../services/participant.service';
 import { ChatFlowService } from '../services/chat-flow.service';
+import { JoinRoomInput } from '../dto/join-room.input';
+import { TypingEventInput } from '../dto/typing-event.input';
 
 @Injectable()
 export class PresenceHandler {
@@ -11,7 +13,7 @@ export class PresenceHandler {
     private readonly flow: ChatFlowService,
   ) {}
 
-  joinRoom(client: AuthedSocket, payload: { conversationId: string }) {
+  joinRoom(client: AuthedSocket, payload: JoinRoomInput) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
     this.flow.runGeneral(client, async () => {
@@ -27,14 +29,14 @@ export class PresenceHandler {
     });
   }
 
-  leaveRoom(client: AuthedSocket, payload: { conversationId: string }) {
+  leaveRoom(client: AuthedSocket, payload: JoinRoomInput) {
     const { conversationId } = payload;
     void client.leave(conversationId);
     client.data.joinedRooms?.delete(conversationId);
     client.emit(ChatEvents.ROOM_LEFT, { conversationId });
   }
 
-  typingStart(client: AuthedSocket, body: { conversationId: string }) {
+  typingStart(client: AuthedSocket, body: TypingEventInput) {
     const user = this.flow.ensureUser(client);
     if (!user || !body?.conversationId) return;
     this.flow.runGeneral(client, async () => {
@@ -47,7 +49,7 @@ export class PresenceHandler {
     });
   }
 
-  typingStop(client: AuthedSocket, body: { conversationId: string }) {
+  typingStop(client: AuthedSocket, body: TypingEventInput) {
     const user = this.flow.ensureUser(client);
     if (!user || !body?.conversationId) return;
     this.flow.runGeneral(client, async () => {
