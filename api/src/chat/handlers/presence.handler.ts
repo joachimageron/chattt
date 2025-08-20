@@ -34,11 +34,7 @@ export class PresenceHandler {
     client.emit(ChatEvents.ROOM_LEFT, { conversationId });
   }
 
-  typingStart(
-    client: AuthedSocket,
-    body: { conversationId: string },
-    _server: any,
-  ) {
+  typingStart(client: AuthedSocket, body: { conversationId: string }) {
     const user = this.flow.ensureUser(client);
     if (!user || !body?.conversationId) return;
     this.flow.runGeneral(client, async () => {
@@ -51,11 +47,7 @@ export class PresenceHandler {
     });
   }
 
-  typingStop(
-    client: AuthedSocket,
-    body: { conversationId: string },
-    _server: any,
-  ) {
+  typingStop(client: AuthedSocket, body: { conversationId: string }) {
     const user = this.flow.ensureUser(client);
     if (!user || !body?.conversationId) return;
     this.flow.runGeneral(client, async () => {

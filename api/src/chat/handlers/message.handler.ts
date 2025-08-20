@@ -7,6 +7,8 @@ import { ReactionService } from '../services/reaction.service';
 import { sanitizeMessage } from '../sanitize';
 import { SendMessageInput } from '../dto/send-message.input';
 import { ChatFlowService } from '../services/chat-flow.service';
+import { ChatErrorCode } from '../chat-errors';
+import { Server } from 'socket.io';
 
 @Injectable()
 export class MessageHandler {
@@ -20,7 +22,7 @@ export class MessageHandler {
   handleSend(
     client: AuthedSocket,
     body: SendMessageInput & { tempId?: string },
-    server: any,
+    server: Server,
   ) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
@@ -29,8 +31,12 @@ export class MessageHandler {
       async () => {
         if (!this.flow.checkRateLimit(user.id)) {
           client.emit(ChatEvents.MESSAGE_ERROR, {
-            error: 'rate_limited',
-            tempId: body.tempId,
+            error: {
+              code: ChatErrorCode.RATE_LIMITED,
+              message: 'rate_limited',
+              context: 'message',
+              data: { tempId: body.tempId },
+            },
           });
           return;
         }
@@ -84,7 +90,7 @@ export class MessageHandler {
   handleDelivered(
     client: AuthedSocket,
     body: { conversationId: string; messageIds: string[] },
-    server: any,
+    server: Server,
   ) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
@@ -105,7 +111,7 @@ export class MessageHandler {
   handleRead(
     client: AuthedSocket,
     body: { conversationId: string; messageIds: string[] },
-    server: any,
+    server: Server,
   ) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
@@ -136,7 +142,7 @@ export class MessageHandler {
   handleEdit(
     client: AuthedSocket,
     body: { messageId: string; content: string; conversationId: string },
-    server: any,
+    server: Server,
   ) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
@@ -155,7 +161,7 @@ export class MessageHandler {
   handleDelete(
     client: AuthedSocket,
     body: { messageId: string; conversationId: string },
-    server: any,
+    server: Server,
   ) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
@@ -173,7 +179,7 @@ export class MessageHandler {
   handleReactionAdd(
     client: AuthedSocket,
     body: { messageId: string; conversationId: string; emoji: string },
-    server: any,
+    server: Server,
   ) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
@@ -200,7 +206,7 @@ export class MessageHandler {
   handleReactionRemove(
     client: AuthedSocket,
     body: { messageId: string; conversationId: string; emoji: string },
-    server: any,
+    server: Server,
   ) {
     const user = this.flow.ensureUser(client);
     if (!user) return;

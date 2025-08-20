@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ChatEvents } from '../events';
 import { AuthedSocket } from '../socket.types';
 import { User } from '../../users/entities/user.entity';
+import { ChatErrorCode, mapErrorToChatError } from '../chat-errors';
 
 interface RateEntry {
   windowStart: number;
@@ -20,7 +21,13 @@ export class ChatFlowService {
   ensureUser(client: AuthedSocket): User | null {
     const user = client.data.user;
     if (!user) {
-      client.emit(ChatEvents.ERROR, { message: 'unauthenticated' });
+      client.emit(ChatEvents.ERROR, {
+        error: {
+          code: ChatErrorCode.UNAUTHENTICATED,
+          message: 'unauthenticated',
+          context: 'auth',
+        },
+      });
       this.logger.warn(`Unauthenticated event from socket ${client.id}`);
       return null;
     }
@@ -54,8 +61,8 @@ export class ChatFlowService {
 
   runGeneral(client: AuthedSocket, action: () => Promise<void>): void {
     void this.runSafe(client, action, (e) => {
-      const message = (e as Error)?.message || 'unknown_error';
-      client.emit(ChatEvents.ERROR, { message });
+      const payload = mapErrorToChatError(e, 'general');
+      client.emit(ChatEvents.ERROR, { error: payload });
     });
   }
 
@@ -65,8 +72,9 @@ export class ChatFlowService {
     buildPayload: () => Record<string, unknown> = () => ({}),
   ): void {
     void this.runSafe(client, action, (e) => {
-      const error = (e as Error)?.message || 'unknown_error';
-      client.emit(ChatEvents.MESSAGE_ERROR, { error, ...buildPayload() });
+      const base = buildPayload();
+      const payload = mapErrorToChatError(e, 'message', base);
+      client.emit(ChatEvents.MESSAGE_ERROR, { error: payload });
     });
   }
 }

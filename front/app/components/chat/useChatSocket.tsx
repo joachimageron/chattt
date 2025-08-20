@@ -24,8 +24,40 @@ export function useChatSocket() {
       console.log("[socket] connected");
       socket.emit(ChatEvents.CONVERSATION_LIST);
     };
-    const onError = (err: unknown) => {
-      console.error("Socket error", err);
+    interface ChatErrorPayload {
+      code: string;
+      message: string;
+      context?: string;
+      data?: Record<string, unknown>;
+    }
+    const friendlyErrorMessage = (error: ChatErrorPayload): string => {
+      const map: Record<string, string> = {
+        UNAUTHENTICATED: "Authentification requise",
+        RATE_LIMITED: "Trop de messages envoyés, patiente un instant",
+        MESSAGE_TOO_LONG: "Message trop long",
+        EDIT_WINDOW_EXPIRED: "Délai d'édition expiré",
+        DELETE_WINDOW_EXPIRED: "Délai de suppression expiré",
+        NOT_PARTICIPANT: "Accès refusé à cette conversation",
+        FORBIDDEN: "Action non autorisée",
+      };
+      return map[error.code] || error.message || "Erreur";
+    };
+    const onError = (payload: unknown) => {
+      // Backend envoie désormais { error: { code, message, context, data? } }
+      type MaybeErrorWrapper = { error?: ChatErrorPayload };
+      const raw: ChatErrorPayload | undefined =
+        payload && typeof payload === "object" && "error" in payload
+          ? (payload as MaybeErrorWrapper).error
+          : undefined;
+      if (raw) {
+        addToast({
+          title: "Erreur",
+          description: friendlyErrorMessage(raw),
+          color: "danger",
+        });
+      } else {
+        console.error("Socket error", payload);
+      }
     };
     const onConversationList = (payload: {
       conversations: ConversationSummary[];
@@ -136,13 +168,16 @@ export function useChatSocket() {
       }
     };
 
-    const onMessageError = (payload: { error: string; tempId?: string }) => {
+    const onMessageError = (payload: { error: ChatErrorPayload }) => {
+      const { error } = payload;
+      const tempId = (error.data?.tempId as string | undefined) || undefined;
+      const msg = friendlyErrorMessage(error);
       addToast({
         title: "Erreur message",
-        description: payload.error,
+        description: msg,
         color: "danger",
       });
-      if (payload.tempId) chat.markMessageError(payload.tempId, payload.error);
+      if (tempId) chat.markMessageError(tempId, msg);
     };
 
     socket.on("connect", onConnect);

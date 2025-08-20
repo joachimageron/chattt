@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuthedSocket } from '../socket.types';
+import { Server } from 'socket.io';
 import { ChatEvents } from '../events';
 import { ConversationService } from '../services/conversation.service';
 import { ParticipantService } from '../services/participant.service';
@@ -27,7 +28,7 @@ export class ConversationHandler {
     });
   }
 
-  create(client: AuthedSocket, body: CreateConversationInput, server: any) {
+  create(client: AuthedSocket, body: CreateConversationInput, server: Server) {
     const user = this.flow.ensureUser(client);
     if (!user) return;
     this.flow.runGeneral(client, async () => {
@@ -50,7 +51,7 @@ export class ConversationHandler {
   updateTitle(
     client: AuthedSocket,
     body: UpdateConversationTitleInput,
-    server: any,
+    server: Server,
   ) {
     const user = this.flow.ensureUser(client);
     if (!user) return;

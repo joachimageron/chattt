@@ -28,6 +28,7 @@ import { ChatFlowService } from './services/chat-flow.service';
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
+  // NOTE: All error emissions now follow shape { error: { code, message, context, data? } }
 
   constructor(
     private readonly messageHandler: MessageHandler,
@@ -66,7 +67,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.ROOM_JOIN)
-  async handleJoin(
+  handleJoin(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() payload: { conversationId: string },
   ) {
@@ -74,7 +75,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.ROOM_LEAVE)
-  async handleLeave(
+  handleLeave(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() payload: { conversationId: string },
   ) {
@@ -84,7 +85,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Rate limiting moved to ChatFlowService
 
   @SubscribeMessage(ChatEvents.MESSAGE_SEND)
-  async handleSend(
+  handleSend(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: SendMessageInput & { tempId?: string },
   ) {
@@ -92,7 +93,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.MESSAGE_LOAD)
-  async handleLoad(
+  handleLoad(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody()
     body: { conversationId: string; before?: string; limit?: number },
@@ -101,7 +102,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.MESSAGE_DELIVERED)
-  async handleDelivered(
+  handleDelivered(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody()
     body: { conversationId: string; messageIds: string[] },
@@ -110,7 +111,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.MESSAGE_READ)
-  async handleRead(
+  handleRead(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody()
     body: { conversationId: string; messageIds: string[] },
@@ -119,7 +120,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.MESSAGE_EDIT)
-  async handleEdit(
+  handleEdit(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody()
     body: { messageId: string; content: string; conversationId: string },
@@ -128,7 +129,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.MESSAGE_DELETE)
-  async handleDelete(
+  handleDelete(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody()
     body: { messageId: string; conversationId: string },
@@ -137,7 +138,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.REACTION_ADD)
-  async handleReactionAdd(
+  handleReactionAdd(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody()
     body: { messageId: string; conversationId: string; emoji: string },
@@ -146,7 +147,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.REACTION_REMOVE)
-  async handleReactionRemove(
+  handleReactionRemove(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody()
     body: { messageId: string; conversationId: string; emoji: string },
@@ -155,12 +156,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.CONVERSATION_LIST)
-  async handleListConversations(@ConnectedSocket() client: AuthedSocket) {
+  handleListConversations(@ConnectedSocket() client: AuthedSocket) {
     this.conversationHandler.list(client);
   }
 
   @SubscribeMessage(ChatEvents.CONVERSATION_CREATE)
-  async handleCreateConversation(
+  handleCreateConversation(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: CreateConversationInput,
   ) {
@@ -168,7 +169,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.CONVERSATION_TITLE_UPDATE)
-  async handleUpdateConversationTitle(
+  handleUpdateConversationTitle(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: UpdateConversationTitleInput,
   ) {
@@ -176,18 +177,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ChatEvents.TYPING_START)
-  async handleTypingStart(
+  handleTypingStart(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { conversationId: string },
   ) {
-    this.presenceHandler.typingStart(client, body, this.server);
+    this.presenceHandler.typingStart(client, body);
   }
 
   @SubscribeMessage(ChatEvents.TYPING_STOP)
-  async handleTypingStop(
+  handleTypingStop(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { conversationId: string },
   ) {
-    this.presenceHandler.typingStop(client, body, this.server);
+    this.presenceHandler.typingStop(client, body);
   }
 }
