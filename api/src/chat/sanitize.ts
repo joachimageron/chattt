@@ -19,7 +19,9 @@ export function sanitizeUser(user?: User | null) {
   return { id, email, name, createdAt };
 }
 
-export function mapReaction(r: MessageReaction & { user?: User | null }) {
+export function mapReaction(
+  r: (MessageReaction & { user?: User | null }) | MessageReaction,
+) {
   return {
     id: r.id,
     messageId: r.messageId,

@@ -10,6 +10,21 @@ import React, {
 import { ChatMessage } from "./socketClient";
 import { ConversationSummary } from "./types";
 
+function upsertReaction(
+  list: NonNullable<import("./socketClient").ChatMessage["reactions"]>,
+  reaction: NonNullable<
+    import("./socketClient").ChatMessage["reactions"]
+  >[number]
+) {
+  const existingIdx = list.findIndex(
+    (r) => r.userId === reaction.userId && r.emoji === reaction.emoji
+  );
+  if (existingIdx === -1) return [...list, reaction];
+  const copy = [...list];
+  copy[existingIdx] = reaction; // update timestamp if changed
+  return copy;
+}
+
 interface ChatContextValue {
   conversations: Record<string, ConversationSummary>;
   messages: Record<string, ChatMessage[]>;
@@ -36,6 +51,17 @@ interface ChatContextValue {
     conversationId: string,
     messageId: string,
     reactions: ChatMessage["reactions"]
+  ) => void;
+  addMessageReaction: (
+    conversationId: string,
+    messageId: string,
+    reaction: NonNullable<ChatMessage["reactions"]>[number]
+  ) => void;
+  removeMessageReaction: (
+    conversationId: string,
+    messageId: string,
+    userId: string,
+    emoji: string
   ) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   confirmMessage: (tempId: string, real: ChatMessage) => void;
@@ -245,6 +271,57 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const addMessageReaction = useCallback(
+    (
+      conversationId: string,
+      messageId: string,
+      reaction: NonNullable<ChatMessage["reactions"]>[number]
+    ) => {
+      setMessages((prev) => {
+        const list = prev[conversationId] || [];
+        return {
+          ...prev,
+          [conversationId]: list.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  reactions: upsertReaction(m.reactions || [], reaction),
+                }
+              : m
+          ),
+        };
+      });
+    },
+    []
+  );
+
+  const removeMessageReaction = useCallback(
+    (
+      conversationId: string,
+      messageId: string,
+      userId: string,
+      emoji: string
+    ) => {
+      setMessages((prev) => {
+        const list = prev[conversationId] || [];
+        return {
+          ...prev,
+          [conversationId]: list.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  reactions: (m.reactions || []).filter(
+                    (r) => !(r.userId === userId && r.emoji === emoji)
+                  ),
+                }
+              : m
+          ),
+        };
+      });
+    },
+    []
+  );
+
   const deleteMessage = useCallback(
     (conversationId: string, messageId: string) => {
       setMessages((prev) => {
@@ -297,6 +374,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       upsertMessages,
       updateMessage,
       updateMessageReactions,
+      addMessageReaction,
+      removeMessageReaction,
       deleteMessage,
       confirmMessage,
       markMessageError,
@@ -333,6 +412,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       upsertMessages,
       updateMessage,
       updateMessageReactions,
+      addMessageReaction,
+      removeMessageReaction,
       deleteMessage,
       confirmMessage,
       markMessageError,

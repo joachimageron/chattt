@@ -226,7 +226,7 @@ export function useChatSocket() {
       }
     );
     socket.on(ChatEvents.MESSAGE_ERROR, onMessageError);
-    type ReactionPayload = {
+    type Reaction = {
       id: string;
       messageId: string;
       userId: string;
@@ -235,8 +235,7 @@ export function useChatSocket() {
     };
     socket.on(
       ChatEvents.REACTION_ADDED,
-      (p: { messageId: string; reactions: ReactionPayload[] }) => {
-        // Find conversation containing message (prefer active)
+      (p: { messageId: string; reaction: Reaction }) => {
         let convId = chat.activeConversationId;
         if (!convId) {
           for (const [cid, list] of Object.entries(chat.messages)) {
@@ -246,13 +245,17 @@ export function useChatSocket() {
             }
           }
         }
-        if (convId)
-          chat.updateMessageReactions(convId, p.messageId, p.reactions);
+        if (convId) {
+          chat.addMessageReaction(convId, p.messageId, p.reaction);
+        }
       }
     );
     socket.on(
       ChatEvents.REACTION_REMOVED,
-      (p: { messageId: string; reactions: ReactionPayload[] }) => {
+      (p: {
+        messageId: string;
+        reaction: { messageId: string; userId: string; emoji: string };
+      }) => {
         let convId = chat.activeConversationId;
         if (!convId) {
           for (const [cid, list] of Object.entries(chat.messages)) {
@@ -262,8 +265,14 @@ export function useChatSocket() {
             }
           }
         }
-        if (convId)
-          chat.updateMessageReactions(convId, p.messageId, p.reactions);
+        if (convId) {
+          chat.removeMessageReaction(
+            convId,
+            p.messageId,
+            p.reaction.userId,
+            p.reaction.emoji
+          );
+        }
       }
     );
     socket.on(

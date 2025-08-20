@@ -26,7 +26,7 @@ export class ReactionService {
     conversationId: string,
     user: User,
     emoji: string,
-  ): Promise<MessageReaction[]> {
+  ): Promise<MessageReaction> {
     await this.participantService.ensureParticipant(conversationId, user.id);
     const message = await this.messageRepo.findOne({
       where: { id: messageId },
@@ -45,10 +45,12 @@ export class ReactionService {
       .values({ messageId, userId: user.id, emoji: sanitizedEmoji })
       .orIgnore()
       .execute();
-    return this.reactionRepo.find({
-      where: { messageId },
-      order: { createdAt: 'ASC' },
+    // Fetch (whether newly inserted or existing) for idempotent behaviour
+    const reaction = await this.reactionRepo.findOne({
+      where: { messageId, userId: user.id, emoji: sanitizedEmoji },
     });
+    // Should always exist now
+    return reaction!;
   }
 
   async removeReaction(
@@ -56,16 +58,16 @@ export class ReactionService {
     conversationId: string,
     user: User,
     emoji: string,
-  ): Promise<MessageReaction[]> {
+  ): Promise<{ messageId: string; userId: string; emoji: string }> {
     await this.participantService.ensureParticipant(conversationId, user.id);
+    const sanitizedEmoji = emoji
+      .trim()
+      .slice(0, CHAT_CONSTANTS.REACTION.EMOJI_MAX_LENGTH);
     await this.reactionRepo.delete({
       messageId,
       userId: user.id,
-      emoji: emoji.trim().slice(0, CHAT_CONSTANTS.REACTION.EMOJI_MAX_LENGTH),
+      emoji: sanitizedEmoji,
     });
-    return this.reactionRepo.find({
-      where: { messageId },
-      order: { createdAt: 'ASC' },
-    });
+    return { messageId, userId: user.id, emoji: sanitizedEmoji };
   }
 }

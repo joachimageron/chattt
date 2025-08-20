@@ -172,7 +172,7 @@ export class MessageHandler {
     const user = this.exec.ensureUser(client);
     if (!user) return;
     this.exec.runMessage(client, async () => {
-      const reactions = await this.reactions.addReaction(
+      const reaction = await this.reactions.addReaction(
         body.messageId,
         body.conversationId,
         user,
@@ -180,7 +180,7 @@ export class MessageHandler {
       );
       server.to(body.conversationId).emit(ChatEvents.REACTION_ADDED, {
         messageId: body.messageId,
-        reactions: reactions.map(mapReaction),
+        reaction: mapReaction(reaction),
       });
     });
   }
@@ -193,7 +193,7 @@ export class MessageHandler {
     const user = this.exec.ensureUser(client);
     if (!user) return;
     this.exec.runMessage(client, async () => {
-      const reactions = await this.reactions.removeReaction(
+      const removed = await this.reactions.removeReaction(
         body.messageId,
         body.conversationId,
         user,
@@ -201,7 +201,7 @@ export class MessageHandler {
       );
       server.to(body.conversationId).emit(ChatEvents.REACTION_REMOVED, {
         messageId: body.messageId,
-        reactions: reactions.map(mapReaction),
+        reaction: removed,
       });
     });
   }
