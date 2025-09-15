@@ -12,10 +12,6 @@ import { MessageItem } from "./MessageItem";
 import { dayLabelFR } from "./utils";
 import { useAuth } from "../providers/AuthProvider";
 import { useChat } from "./ChatContext";
-import { 
-  useConversation, 
-  useMessagesForConversation
-} from "./store/selectors";
 
 interface MessageListProps {
   conversationId: string; // pour détecter changement de conversation
@@ -31,7 +27,7 @@ interface MessageListProps {
 
 export function MessageList({
   conversationId,
-  messages, // Keep this prop for compatibility, but we'll use store data when available
+  messages,
   onEdit,
   onDelete,
   loading,
@@ -42,17 +38,7 @@ export function MessageList({
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
-  
-  // Use Zustand selectors for optimized access to specific data slices
-  const conversation = useConversation(conversationId);
-  const storeMessages = useMessagesForConversation(conversationId);
-  
-  // Fallback to context-based chat for compatibility during migration
   const chat = useChat();
-  
-  // Use store messages if available, otherwise fall back to prop messages
-  const actualMessages = storeMessages.length > 0 ? storeMessages : messages;
-  
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Virtualisation simple basée sur hauteur approximative (lineHeight ~ 40px)
@@ -68,20 +54,20 @@ export function MessageList({
 
   useEffect(() => {
     onScroll();
-  }, [actualMessages.length, onScroll]);
+  }, [messages.length, onScroll]);
 
   // ID du dernier message envoyé par l'utilisateur courant (non supprimé)
   const lastOwnMessageId = useMemo(() => {
     if (!user) return null;
-    for (let i = actualMessages.length - 1; i >= 0; i--) {
-      const m = actualMessages[i];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
       if (m.senderId === user.id) return m.id;
     }
     return null;
-  }, [actualMessages, user]);
+  }, [messages, user]);
 
   // Calcul fenêtre
-  const total = actualMessages.length;
+  const total = messages.length;
   const startIndex = Math.max(
     0,
     Math.floor(scrollTop / EST_ITEM_HEIGHT) - 5 // buffer
@@ -90,35 +76,30 @@ export function MessageList({
     total,
     Math.ceil((scrollTop + viewportHeight) / EST_ITEM_HEIGHT) + 5
   );
-  const visible = actualMessages.slice(startIndex, endIndex);
+  const visible = messages.slice(startIndex, endIndex);
   const padTop = startIndex * EST_ITEM_HEIGHT;
   const padBottom = (total - endIndex) * EST_ITEM_HEIGHT;
 
-  // Participants qui ont lu: utiliser les données du store en priorité
-  const participants = useMemo(() => {
-    if (conversation) {
-      return conversation.participants || [];
-    }
-    // Fallback to context data
-    return conversationId && chat.conversations[conversationId]
-      ? chat.conversations[conversationId].participants || []
-      : [];
-  }, [conversation, conversationId, chat.conversations]);
-  
-  const isGroupConversation = useMemo(() => {
-    if (conversation) {
-      return conversation.type === "GROUP";
-    }
-    // Fallback to context data
-    return conversationId && chat.conversations[conversationId]
-      ? chat.conversations[conversationId].type === "GROUP"
-      : false;
-  }, [conversation, conversationId, chat.conversations]);
+  // Participants qui ont lu: pour chaque message on montrera avatars des lecteurs
+  const participants = useMemo(
+    () =>
+      chat.activeConversationId
+        ? chat.conversations[chat.activeConversationId]?.participants || []
+        : [],
+    [chat.activeConversationId, chat.conversations]
+  );
+  const isGroupConversation = useMemo(
+    () =>
+      chat.activeConversationId
+        ? chat.conversations[chat.activeConversationId]?.type === "GROUP"
+        : false,
+    [chat.activeConversationId, chat.conversations]
+  );
 
   // Map messageId -> list of participants (excluding current user) for whom THIS message
   // is the latest outgoing message (from the current user) they have seen.
   const readersMap = useMemo(() => {
-    if (!user?.id || !participants.length || !actualMessages.length)
+    if (!user?.id || !participants.length || !messages.length)
       return {} as Record<
         string,
         { userId: string; initials: string; name: string }[]
@@ -128,7 +109,7 @@ export function MessageList({
       { userId: string; initials: string; name: string }[]
     > = {};
     // Traverse participants and find for each their last seen message authored by current user.
-    const ordered = [...actualMessages]; // messages already sorted asc
+    const ordered = [...messages]; // messages already sorted asc
     for (const p of participants) {
       if (p.userId === user.id) continue; // skip self
       if (!p.lastReadAt) continue;
@@ -152,10 +133,10 @@ export function MessageList({
       }
     }
     return map;
-  }, [actualMessages, participants, user?.id]);
+  }, [messages, participants, user?.id]);
 
   // Auto scroll: sur nouveau message si utilisateur proche du bas (limite les micro adjustments)
-  const lastId = actualMessages.length ? actualMessages[actualMessages.length - 1].id : undefined;
+  const lastId = messages.length ? messages[messages.length - 1].id : undefined;
   useEffect(() => {
     if (!containerRef.current || !lastId) return;
     const el = containerRef.current;
@@ -175,7 +156,7 @@ export function MessageList({
   const initialScrolledRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!containerRef.current) return;
-    if (!actualMessages.length) return;
+    if (!messages.length) return;
     if (initialScrolledRef.current.has(conversationId)) return;
     const el = containerRef.current;
     requestAnimationFrame(() => {
@@ -190,7 +171,7 @@ export function MessageList({
       });
     });
     initialScrolledRef.current.add(conversationId);
-  }, [conversationId, actualMessages.length]);
+  }, [conversationId, messages.length]);
 
   // Infinite scroll: observer du haut
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -263,7 +244,7 @@ export function MessageList({
         // Date separator: insérer avant si premier visible ou jour différent du précédent global (pas juste visible slice)
         const prevGlobalIndex = startIndex + idx - 1;
         const prevGlobal =
-          prevGlobalIndex >= 0 ? actualMessages[prevGlobalIndex] : undefined;
+          prevGlobalIndex >= 0 ? messages[prevGlobalIndex] : undefined;
         const showDaySeparator = (() => {
           if (!prevGlobal) return true;
           const d1 = new Date(prevGlobal.createdAt);

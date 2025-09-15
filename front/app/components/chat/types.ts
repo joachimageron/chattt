@@ -6,6 +6,7 @@ export enum MessageType {
 }
 
 export enum MessageStatus {
+  SENDING = "SENDING",
   SENT = "SENT",
   DELIVERED = "DELIVERED",
   READ = "READ",
