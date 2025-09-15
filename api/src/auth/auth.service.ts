@@ -10,7 +10,7 @@ import { User } from '../users/entities/user.entity';
 import { LoginInput } from './dto/login.input';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { ConfigService } from '@nestjs/config';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { Repository } from 'typeorm';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -33,7 +33,7 @@ export class AuthService {
   }
 
   async login(loginInput: LoginInput, response: Response) {
-    const { email, password } = loginInput;
+    const { email, password, rememberMe } = loginInput;
 
     // Find user and validate password
     const user = await this.validateUser(email, password);
@@ -42,20 +42,24 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Generate JWT token
+    // Generate JWT token with appropriate expiration
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
     };
 
-    const token = this.jwtService.sign(payload);
+    // Set token expiration based on rememberMe option
+    const tokenExpiration = rememberMe ? '30d' : '24h';
+    const cookieExpiration = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000; // 30 days or 24 hours in ms
+
+    const token = this.jwtService.sign(payload, { expiresIn: tokenExpiration });
 
     // Set the JWT in an HTTP-only cookie
     response.cookie('access_token', token, {
       httpOnly: true,
       secure: this.configService.get('NODE_ENV') === 'production',
       sameSite: 'lax',
-      maxAge: 3600000,
+      maxAge: cookieExpiration,
     });
 
     return { user };
@@ -64,6 +68,56 @@ export class AuthService {
   logout(response: Response) {
     response.clearCookie('access_token');
     return { success: true };
+  }
+
+  async refreshToken(request: any, response: Response) {
+    // Extract the current token from cookies
+    const currentToken = request.cookies?.access_token;
+    
+    if (!currentToken) {
+      throw new UnauthorizedException('No token provided');
+    }
+
+    try {
+      // Verify and decode the current token
+      const decoded = this.jwtService.verify(currentToken) as JwtPayload;
+      
+      // Find user to ensure they still exist
+      const user = await this.usersService.findOne(decoded.sub);
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Generate new token with same expiration strategy
+      // Check if current token was long-lived (30 days) or short-lived (24h)
+      let isLongLived = false;
+      if (decoded.exp && decoded.iat) {
+        const tokenDuration = decoded.exp - decoded.iat;
+        isLongLived = tokenDuration > (25 * 60 * 60); // More than 25 hours means it was a 30-day token
+      }
+
+      const newTokenExpiration = isLongLived ? '30d' : '24h';
+      const newCookieExpiration = isLongLived ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+
+      const newPayload: JwtPayload = {
+        sub: user.id,
+        email: user.email,
+      };
+
+      const newToken = this.jwtService.sign(newPayload, { expiresIn: newTokenExpiration });
+
+      // Set new token in cookie
+      response.cookie('access_token', newToken, {
+        httpOnly: true,
+        secure: this.configService.get('NODE_ENV') === 'production',
+        sameSite: 'lax',
+        maxAge: newCookieExpiration,
+      });
+
+      return { user, refreshed: true };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid token');
+    }
   }
 
   // Initiate password reset process (no info leak)

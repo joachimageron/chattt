@@ -1,5 +1,5 @@
 import { Resolver, Mutation, Args, Context } from '@nestjs/graphql';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginInput } from './dto/login.input';
 import { LoginResponse } from './dto/login-response';
@@ -15,6 +15,13 @@ export class AuthResolver {
     @Context() context: { res: Response },
   ) {
     return this.authService.login(loginInput, context.res);
+  }
+
+  @Mutation(() => LoginResponse)
+  async refreshToken(
+    @Context() context: { req: Request; res: Response },
+  ) {
+    return this.authService.refreshToken(context.req, context.res);
   }
 
   @Mutation(() => LogoutResponse)
