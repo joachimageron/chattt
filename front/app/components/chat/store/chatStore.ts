@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { subscribeWithSelector } from 'zustand/middleware';
+import { subscribeWithSelector, devtools } from 'zustand/middleware';
 import { ChatMessage } from '../socketClient';
 import { ConversationSummary } from '../types';
 import { ChatMetaEntry } from '../chatReducer';
@@ -87,7 +87,8 @@ function upsertReaction(
 }
 
 export const useChatStore = create<ChatStore>()(
-  subscribeWithSelector((set, get) => ({
+  devtools(
+    subscribeWithSelector((set, get) => ({
     // Initial state
     conversations: {},
     messages: {},
@@ -340,5 +341,7 @@ export const useChatStore = create<ChatStore>()(
     getConversationIdForMessage: (messageId) => {
       return get().messageToConversation[messageId];
     },
-  }))
+  })), {
+    name: 'chat-store', // Name for devtools
+  })
 );

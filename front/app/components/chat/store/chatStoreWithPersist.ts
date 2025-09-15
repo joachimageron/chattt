@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { subscribeWithSelector, persist } from 'zustand/middleware';
+import { subscribeWithSelector, persist, devtools } from 'zustand/middleware';
 import { ChatMessage } from '../socketClient';
 import { ConversationSummary } from '../types';
 import { ChatMetaEntry } from '../chatReducer';
@@ -91,8 +91,9 @@ function upsertReaction(
 
 // Create store with persistence
 export const useChatStore = create<ChatStore>()(
-  subscribeWithSelector(
-    persist(
+  devtools(
+    subscribeWithSelector(
+      persist(
       (set, get) => ({
         // Initial state
         conversations: {},
@@ -380,5 +381,7 @@ export const useChatStore = create<ChatStore>()(
         },
       }
     )
-  )
+  ), {
+    name: 'chat-store-persistent', // Name for devtools
+  })
 );

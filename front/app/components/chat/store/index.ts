@@ -13,9 +13,10 @@ export function useChatZustand() {
 export const ENABLE_PERSISTENCE = process.env.NEXT_PUBLIC_CHAT_PERSISTENCE === 'true';
 
 // Export the appropriate store based on configuration
+// Note: This needs to be determined at build time due to ES module constraints
 export { useChatStore } from './chatStore';
-// To use persistent store instead, uncomment the line below and comment the line above:
-// export { useChatStore } from './chatStoreWithPersist';
+// For persistence, manually switch the import above to './chatStoreWithPersist'
+// Or use environment-specific builds
 
 // Export types for convenience
 export type { ChatStore, ChatState, ChatActions } from './chatStore';
