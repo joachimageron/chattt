@@ -21,6 +21,7 @@ interface User {
 interface LoginInput {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }
 interface RegisterInput {
   email: string;
@@ -35,6 +36,7 @@ interface AuthContextValue {
   register: (input: RegisterInput) => Promise<User>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  refreshToken: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -77,7 +79,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Chargement initial de la session
     void refresh();
-  }, [refresh]);
+
+    // Set up automatic token refresh every 23 hours for long-lived tokens
+    // and every 30 minutes for short-lived tokens
+    const setupTokenRefresh = () => {
+      // Try to refresh token every 30 minutes to detect if we have a long-lived token
+      const interval = setInterval(async () => {
+        if (user) {
+          try {
+            await refreshToken();
+          } catch {
+            console.log("Token refresh failed, user needs to re-login");
+          }
+        }
+      }, 30 * 60 * 1000); // 30 minutes
+
+      return () => clearInterval(interval);
+    };
+
+    const cleanup = setupTokenRefresh();
+    return cleanup;
+  }, [refresh, refreshToken, user]);
 
   const login = useCallback(async (input: LoginInput): Promise<User> => {
     try {
@@ -129,6 +151,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [login]
   );
 
+  const refreshToken = useCallback(async () => {
+    try {
+      const data = await gqlFetch<{ refreshToken: { user: User; refreshed: boolean } }>(
+        AUTH_QUERIES.REFRESH_TOKEN
+      );
+      setUser(data.refreshToken.user);
+    } catch {
+      // If refresh fails, user needs to login again
+      setUser(null);
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -176,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     register,
     logout,
     refresh,
+    refreshToken,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

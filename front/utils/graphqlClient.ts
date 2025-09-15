@@ -26,7 +26,12 @@ export async function gqlFetch<T>(
 
   const json: GraphQLResponse<T> = await res.json();
   if (json.errors && json.errors.length) {
-    throw new Error(json.errors.map((e) => e.message).join("\n"));
+    const errorMessage = json.errors.map((e) => e.message).join("\n");
+    // Check if it's an authentication error
+    if (errorMessage.includes("Unauthorized") || errorMessage.includes("Invalid credentials")) {
+      throw new Error("UNAUTHORIZED");
+    }
+    throw new Error(errorMessage);
   }
   if (!json.data) {
     throw new Error("No data returned");
@@ -40,6 +45,7 @@ export const AUTH_QUERIES = {
   LOGIN: `mutation Login($loginInput: LoginInput!) { login(loginInput: $loginInput) { user { id email name } } }`,
   REGISTER: `mutation Register($createUserInput: CreateUserInput!) { createUser(createUserInput: $createUserInput) { id email name } }`,
   LOGOUT: `mutation Logout { logout { success } }`,
+  REFRESH_TOKEN: `mutation RefreshToken { refreshToken { user { id email name } refreshed } }`,
 };
 
 export const USER_QUERIES = {

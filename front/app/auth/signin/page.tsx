@@ -34,6 +34,7 @@ export default function Page() {
 
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
+    const rememberMe = formData.get("remember") === "on"; // Checkbox value
 
     if (!email || !password) {
       setLoading(false);
@@ -42,7 +43,7 @@ export default function Page() {
 
     try {
       // Utilise la fonction login du contexte d'authentification
-      const loginData = await login({ email, password });
+      const loginData = await login({ email, password, rememberMe });
       console.log("Login data:", loginData);
 
       // Redirection après la connexion réussie
