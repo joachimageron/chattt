@@ -6,14 +6,8 @@ import { ConversationList } from "../components/chat/ConversationList";
 import { MessageList } from "../components/chat/MessageList";
 import { MessageInput } from "../components/chat/MessageInput";
 import { Spinner, Button, Input, Tooltip } from "@heroui/react";
-import { 
-  useActiveConversationId,
-  useActiveConversationMessages,
-  useActiveConversationMeta,
-  useActiveConversation,
-  useActiveConversationTyping,
-  useChatActions
-} from "../components/chat/store/selectors";
+import { useChat } from "../components/chat/ChatContext";
+import type { ChatMessage } from "../components/chat/socketClient";
 import { useSearchParams, useRouter } from "next/navigation";
 
 export default function ChatPage() {
@@ -27,18 +21,8 @@ export default function ChatPage() {
     emitTyping,
     resendMessage,
   } = useChatSocket();
-  
-  // Use optimized Zustand selectors
-  const activeConversationId = useActiveConversationId();
-  const messages = useActiveConversationMessages();
-  const meta = useActiveConversationMeta();
-  const currentConversation = useActiveConversation();
-  const typingUsers = useActiveConversationTyping();
-  const { setActiveConversation } = useChatActions();
-  
-  // Chat context kept for compatibility during migration
-  // const chat = useChat();
-  
+  const chat = useChat();
+  const { activeConversationId, messages, setActiveConversation } = chat;
   const messageInputRef = useRef<HTMLInputElement | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingInitialContent, setEditingInitialContent] =
@@ -48,7 +32,7 @@ export default function ChatPage() {
   const startEdit = useCallback(
     (id: string) => {
       if (!activeConversationId) return;
-      const msg = messages.find((m) => m.id === id);
+      const msg = messages[activeConversationId]?.find((m) => m.id === id);
       if (!msg || msg.isDeleted) return;
       setEditingMessageId(id);
       setEditingInitialContent(msg.content);
@@ -139,8 +123,15 @@ export default function ChatPage() {
   }, [activeConversationId]);
 
   // Determine current conversation + display title early (before conditional returns)
-  const currentMessages = messages;
-  const currentMeta = meta || { hasMore: true, loadingOlder: false };
+  const currentConversation = activeConversationId
+    ? chat.conversations[activeConversationId]
+    : undefined;
+  const currentMessages = activeConversationId
+    ? (messages[activeConversationId] as ChatMessage[] | undefined) || []
+    : [];
+  const currentMeta = activeConversationId
+    ? chat.meta[activeConversationId] || { hasMore: true, loadingOlder: false }
+    : { hasMore: false, loadingOlder: false };
 
   // Update editable group title when conversation changes
   useEffect(() => {
@@ -267,9 +258,10 @@ export default function ChatPage() {
             {/* Typing indicator */}
             {(() => {
               if (!activeConversationId) return null;
+              const typingMap = chat.typing[activeConversationId] || {};
               const now = Date.now();
               // Expire entries older than 5s (display only active)
-              const activeTypers = Object.entries(typingUsers)
+              const activeTypers = Object.entries(typingMap)
                 .filter(([uid, ts]) => now - ts < 5000 && uid !== user.id)
                 .map(([uid]) => uid);
               if (!activeTypers.length) return null;

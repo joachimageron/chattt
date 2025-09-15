@@ -19,11 +19,7 @@ import {
   Listbox,
   ListboxItem,
 } from "@heroui/react";
-import { 
-  useConversations, 
-  useActiveConversationId,
-  useChatActions 
-} from "./store/selectors";
+import { useChat } from "./ChatContext";
 import type { ConversationSummary } from "./types";
 import { useState } from "react";
 import { useChatSocket } from "./useChatSocket";
@@ -35,14 +31,8 @@ interface ConversationListProps {
 }
 
 export function ConversationList({ onSelect }: ConversationListProps) {
-  // Use Zustand selectors for optimized access
-  const conversations = useConversations();
-  const activeConversationId = useActiveConversationId();
-  const { setActiveConversation } = useChatActions();
-  
-  // Keep context access for compatibility during migration  
-  // const chat = useChat();
-  
+  const { conversations, activeConversationId, setActiveConversation } =
+    useChat();
   const list = Object.values(conversations) as ConversationSummary[];
   const { createConversation } = useChatSocket();
   const { user } = useAuth();
