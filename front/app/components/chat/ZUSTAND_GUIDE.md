@@ -13,6 +13,27 @@ The chat application has been migrated from React Context to Zustand for better 
 - **Actions**: All operations from the original `chatReducer`
 - **Middleware**: Uses `subscribeWithSelector` for optimized subscriptions
 
+### Persistent Store (`chatStoreWithPersist.ts`) - Optional
+- **All core features** plus persistence with Zustand persist middleware
+- **Selective persistence**: Only persists conversations, messages, meta (not typing)
+- **Schema versioning**: Migration support for future changes
+- **Storage**: Uses localStorage by default (configurable)
+
+### Switching Between Stores
+To enable persistence, modify `store/index.ts`:
+```typescript
+// Non-persistent (default)
+export { useChatStore } from './chatStore';
+
+// Persistent (uncomment to enable)
+// export { useChatStore } from './chatStoreWithPersist';
+```
+
+Or use environment variable:
+```env
+NEXT_PUBLIC_CHAT_PERSISTENCE=true
+```
+
 ### Key State Slices
 ```typescript
 interface ChatState {
@@ -102,7 +123,7 @@ function MessageList({ conversationId }) {
 - [x] Maintain backward compatibility
 
 ### Phase 2 (Optional)
-- [ ] Add state persistence with Zustand persist middleware
+- [x] Add state persistence with Zustand persist middleware
 - [ ] Migrate remaining socket event handlers
 - [ ] Add Zustand devtools integration
 - [ ] Performance testing and optimization
@@ -140,6 +161,18 @@ function MessageInput({ conversationId }) {
     upsertMessages(conversationId, [message]);
   };
 }
+```
+
+### Using Actions with Persistence
+```typescript
+function DataManagement() {
+  const { clearPersistedData } = useChatActions();
+  
+  const handleClearCache = () => {
+    clearPersistedData(); // Clears all persisted data
+  };
+}
+```
 ```
 
 ### Legacy Compatibility
