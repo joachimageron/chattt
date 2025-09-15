@@ -101,7 +101,7 @@ export default function EmailVerificationPage({
           {verificationStatus === "success" && (
             <Button
               color="primary"
-              onClick={navigateToLogin}
+              onPress={navigateToLogin}
               className="w-full"
             >
               Sign In
@@ -109,7 +109,7 @@ export default function EmailVerificationPage({
           )}
 
           {verificationStatus === "error" && (
-            <Button color="primary" onClick={navigateToHome} className="w-full">
+            <Button color="primary" onPress={navigateToHome} className="w-full">
               Return to Home
             </Button>
           )}

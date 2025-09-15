@@ -5,7 +5,7 @@ import { Button, Input, Tooltip } from "@heroui/react";
 interface MessageInputProps {
   onSend: (value: string) => void;
   disabled?: boolean;
-  inputRef?: React.RefObject<HTMLInputElement>;
+  inputRef?: React.RefObject<HTMLInputElement | null> | null;
   onTypingChange?: (typing: boolean) => void; // notification when user starts/stops typing
 }
 
@@ -75,8 +75,7 @@ export function MessageInput({
         }}
         isDisabled={disabled}
         // external ref to allow parent to control focus when conversation changes
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ref={inputRef as React.RefObject<any>}
+        ref={inputRef}
         autoFocus
       />
       <Tooltip content="Envoyer">
