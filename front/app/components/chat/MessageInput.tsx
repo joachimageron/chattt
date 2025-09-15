@@ -5,7 +5,7 @@ import { Button, Input, Tooltip } from "@heroui/react";
 interface MessageInputProps {
   onSend: (value: string) => void;
   disabled?: boolean;
-  inputRef?: React.RefObject<HTMLInputElement>;
+  inputRef?: React.RefObject<HTMLInputElement> | null;
   onTypingChange?: (typing: boolean) => void; // notification when user starts/stops typing
 }
 
