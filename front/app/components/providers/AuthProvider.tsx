@@ -76,6 +76,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const refreshToken = useCallback(async () => {
+    try {
+      const data = await gqlFetch<{ refreshToken: { user: User; refreshed: boolean } }>(
+        AUTH_QUERIES.REFRESH_TOKEN
+      );
+      setUser(data.refreshToken.user);
+    } catch {
+      // If refresh fails, user needs to login again
+      setUser(null);
+    }
+  }, []);
+
   useEffect(() => {
     // Chargement initial de la session
     void refresh();
@@ -150,18 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [login]
   );
-
-  const refreshToken = useCallback(async () => {
-    try {
-      const data = await gqlFetch<{ refreshToken: { user: User; refreshed: boolean } }>(
-        AUTH_QUERIES.REFRESH_TOKEN
-      );
-      setUser(data.refreshToken.user);
-    } catch {
-      // If refresh fails, user needs to login again
-      setUser(null);
-    }
-  }, []);
 
   const logout = useCallback(async () => {
     try {
