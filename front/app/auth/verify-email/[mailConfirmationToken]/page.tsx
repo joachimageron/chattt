@@ -1,6 +1,6 @@
 "use client";
 
-import React, { use, Usable, useState, useEffect } from "react";
+import React, { use, useState, useEffect } from "react";
 import { Card, CardBody, CardHeader, Spinner, Button } from "@heroui/react";
 // API base URL fallback
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -11,7 +11,7 @@ import { useAuth } from "@/app/components/providers/AuthProvider";
 export default function EmailVerificationPage({
   params,
 }: {
-  params: Usable<{ mailConfirmationToken: string }>;
+  params: Promise<{ mailConfirmationToken: string }>;
 }) {
   // Unwrap the params object using React.use()
   const unwrappedParams: { mailConfirmationToken: string } = use(params);

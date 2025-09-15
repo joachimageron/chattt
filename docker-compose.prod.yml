@@ -1,0 +1,38 @@
+services:
+  # API - Production optimizations
+  api:
+    build:
+      target: production
+    environment:
+      - NODE_ENV=production
+    volumes: []  # Remove volume mounts for production
+    command: npm run start:prod
+
+  # Frontend - Production optimizations
+  frontend:
+    build:
+      target: production
+    environment:
+      - NODE_ENV=production
+    volumes: []  # Remove volume mounts for production
+    command: npm start
+
+  # Remove development-only services
+  mailhog:
+    profiles:
+      - dev-only
+
+  # Database - Production settings
+  database:
+    command: 
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=1GB
+
+  # Redis - Production settings
+  redis:
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
